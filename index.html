@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>VFX Setlog</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Setlog">
+<meta name="theme-color" content="#0e1012">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>
+/* Layout: single column, sticky slate bar, cards per data block; gaffer-amber accent on monitor-grey neutrals */
+:root{
+  --bg:#eceef0; --bar:#f7f8f9; --surface:#ffffff; --surface2:#e6e9ec; --fg:#14171a; --muted:#5b646e;
+  --line:#d2d7dc; --accent:#a86a00; --accent-fg:#ffffff; --ok:#16804a; --warn:#b3261e; --rec:#d93025;
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root{--bg:#0e1012;--bar:#14171a;--surface:#181b1f;--surface2:#23272c;--fg:#e9ecef;--muted:#8f97a0;
+  --line:#2c3137;--accent:#f0b23a;--accent-fg:#151515;--ok:#3ccb7f;--warn:#ff6b5e;--rec:#ff5a4f;color-scheme:dark}
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 var(--sans);padding-bottom:calc(40px + env(safe-area-inset-bottom,0px))}
+#bar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:6px;background:var(--bar);border-bottom:1px solid var(--line);
+  padding:calc(env(safe-area-inset-top,0px) + 6px) max(10px,env(safe-area-inset-right,0px)) 8px max(10px,env(safe-area-inset-left,0px));min-height:54px}
+#backBtn{width:44px;height:44px;border:none;background:transparent;color:var(--accent);font-size:30px;line-height:1;cursor:pointer}
+.ttl{flex:1;min-width:0}
+#ttl{font-weight:650;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#sub{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#saveDot{font-size:11px;color:var(--muted);padding:0 6px;white-space:nowrap}
+#saveDot.busy{color:var(--accent)} #saveDot.err{color:var(--warn)}
+main{max-width:720px;margin:0 auto;padding-top:14px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:18px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:12px}
+.stack{display:flex;flex-direction:column;gap:8px}
+.sec{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0;font-weight:650}
+.sec-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.span2{grid-column:1/-1}
+.fld{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fld>span{font-size:12px;color:var(--muted)}
+input,textarea{font:inherit;font-size:16px;color:var(--fg);background:var(--surface2);border:1px solid transparent;border-radius:8px;padding:10px 11px;width:100%;min-width:0;-webkit-appearance:none;appearance:none}
+input:focus,textarea:focus{outline:none;border-color:var(--accent);background:var(--surface)}
+input[type=date],input[type=time]{min-height:44px}
+textarea{resize:vertical}
+.mono-in input{font-family:var(--mono);font-weight:700;letter-spacing:.03em}
+.btn{font:inherit;font-size:15px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:46px;padding:0 16px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer;-webkit-tap-highlight-color:transparent;text-align:center;position:relative}
+.btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.btn.block{width:100%}
+.btn:active{transform:scale(.98)}
+.btn:focus-visible,.chip:focus-visible,.row:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ghost-danger{color:var(--warn);background:transparent}
+.armed{background:var(--warn)!important;color:#fff!important;border-color:var(--warn)!important}
+.btns{display:flex;flex-wrap:wrap;gap:8px}
+.btns>.btn{flex:1 1 140px}
+.row{display:flex;align-items:center;gap:12px;width:100%;text-align:left;font:inherit;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-height:62px;cursor:pointer}
+.row-main{flex:1;min-width:0;display:flex;flex-direction:column}
+.row-main strong{font-weight:620;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.count{color:var(--muted);font-size:12px;white-space:nowrap;text-align:right}
+.badge{display:inline-block;background:var(--fg);color:var(--bg);border-radius:6px;padding:3px 7px;font-size:13px;font-weight:700;letter-spacing:.02em;white-space:nowrap}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font:inherit;font-size:14px;min-height:38px;padding:0 12px;border-radius:19px;border:1px solid var(--line);background:var(--surface2);color:var(--fg);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:600}
+.take{display:grid;grid-template-columns:52px 1fr 40px;gap:6px 8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.take:last-of-type{border-bottom:none}
+.take .note{grid-column:2/4}
+.tnum{width:52px;height:44px;border-radius:22px;border:2px solid var(--line);background:transparent;color:var(--fg);font-size:17px;font-weight:700;cursor:pointer}
+.take.circ .tnum{border-color:var(--ok);color:var(--ok);box-shadow:inset 0 0 0 2px var(--ok)}
+.x{width:40px;height:40px;border-radius:20px;border:none;background:transparent;color:var(--muted);font-size:22px;cursor:pointer;flex:none}
+.x.armed{width:auto;padding:0 10px;font-size:13px;border-radius:8px}
+.cam-h{display:flex;align-items:center;gap:8px;margin:0;font-size:15px}
+.photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.photos:empty{display:none}
+.ph{margin:0;position:relative;display:flex;flex-direction:column;gap:4px;min-width:0}
+.ph img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;background:var(--surface2);cursor:zoom-in}
+.ph .x{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.55);color:#fff;width:34px;height:34px;font-size:18px}
+.ph input{font-size:14px;padding:6px 8px}
+.memo{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-bottom:1px solid var(--line)}
+.memo:last-of-type{border-bottom:none}
+.memo-h{display:flex;align-items:center;gap:8px}
+.memo-h .t{font-size:13px;color:var(--muted);flex:1}
+.memo.done .t::after{content:" · übernommen";color:var(--ok)}
+.memo audio{width:100%;height:36px}
+.rec{background:var(--rec)!important;color:#fff!important;border-color:var(--rec)!important}
+.vh{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;clip:rect(0 0 0 0)}
+.empty{border:1px dashed var(--line);border-radius:12px;padding:16px;color:var(--muted);text-align:center;font-size:14px}
+.hint{font-size:13px;color:var(--muted);margin:0}
+.hint.warn{color:var(--warn)}
+.danger{display:flex;justify-content:center}
+.install{border-color:var(--accent)}
+pre.box{margin:0;max-height:220px;overflow:auto;background:var(--surface2);border-radius:8px;padding:10px;font:12px/1.4 var(--mono);white-space:pre-wrap;word-break:break-word}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;z-index:50;max-width:calc(100% - 32px);text-align:center}
+#sheet,#viewer{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center}
+.sheet-in{background:var(--surface);width:100%;max-width:520px;border-radius:16px 16px 0 0;padding:18px max(16px,env(safe-area-inset-right,0px)) calc(18px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:10px}
+#viewer{align-items:center;background:rgba(0,0,0,.92)}
+#viewer img{max-width:100%;max-height:100%;object-fit:contain}
+/* Report: deliberately paper-white in both themes */
+.toolbar{display:flex;flex-direction:column;gap:8px}
+.report{background:#fff;color:#111;border-radius:8px;padding:20px 18px;font-size:13px;line-height:1.4}
+.report h1{font-size:22px;margin:2px 0 10px;text-wrap:balance}
+.report h2{font-size:16px;margin:0;padding:8px 0 2px;border-bottom:2px solid #111}
+.r-kicker{font-size:11px;letter-spacing:.14em;color:#555}
+.r-meta{display:grid;grid-template-columns:max-content 1fr;gap:2px 12px;margin:0}
+.r-meta dt{color:#555}.r-meta dd{margin:0}
+.r-day{margin-top:18px;display:flex;flex-direction:column;gap:10px}
+.r-sub{margin:0;color:#444}
+.r-setup{border:1px solid #bbb;border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:6px;break-inside:avoid;page-break-inside:avoid}
+.r-sh{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.r-id{font-size:17px;font-weight:800}
+.r-setup p{margin:0}
+.r-tags{color:#7a4d00;font-weight:600}
+.tbl{overflow-x:auto}
+.report table{border-collapse:collapse;width:100%;font-size:11.5px}
+.report th,.report td{border:1px solid #ccc;padding:3px 5px;text-align:left;vertical-align:top}
+.report th{background:#f0f0f0;font-weight:650;white-space:nowrap}
+.r-refs{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px}
+.r-refs .off{color:#999}
+.r-photos{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.r-photos figure{margin:0}.r-photos img{width:100%;border-radius:3px}
+.r-photos figcaption{font-size:10.5px;color:#444}
+.r-memo{font-size:12px;color:#333;border-left:3px solid #ccc;padding-left:8px}
+.r-foot{margin-top:16px;color:#777;font-size:10.5px}
+@media print{
+  @page{margin:12mm}
+  body{background:#fff;padding:0}
+  #bar,.noprint,#toast{display:none!important}
+  main{max-width:none;padding:0}
+  .report{padding:0;border-radius:0}
+  .tbl{overflow:visible}
+}
+@media (prefers-reduced-motion: reduce){.btn:active{transform:none}}
+</style>
+</head>
+<body>
+<header id="bar">
+  <button id="backBtn" aria-label="Zurück" hidden>‹</button>
+  <div class="ttl"><div id="ttl">VFX Setlog</div><div id="sub" class="mono"></div></div>
+  <span id="saveDot" class="mono">gespeichert</span>
+</header>
+<main id="app"></main>
+<div id="toast" role="status" hidden></div>
+<div id="sheet" hidden><div class="sheet-in"><p id="sheetMsg" class="hint"></p><button class="btn primary block" id="sheetGo">Datei teilen / sichern</button><button class="btn block" id="sheetX">Schließen</button></div></div>
+<div id="viewer" hidden><img id="viewerImg" alt=""></div>
+<script>
+'use strict';
+const APP_VERSION='1.0.0';
+const $=s=>document.querySelector(s);
+const app=$('#app');
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+const nl=v=>esc(v).replace(/\n/g,'<br>');
+const uid=()=>(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2,10));
+const clone=o=>JSON.parse(JSON.stringify(o));
+const pad2=v=>String(v??'').padStart(2,'0');
+const today=()=>new Date().toLocaleDateString('sv-SE');
+const nowHM=()=>new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+const fmtDate=d=>{if(!d)return 'Ohne Datum';const x=new Date(d+'T12:00');return isNaN(x)?d:x.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit',year:'numeric'});};
+const fmtDT=ts=>new Date(ts).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+const slug=s=>String(s||'projekt').normalize('NFKD').replace(/[̀-ͯ]/g,'').replace(/[^\w-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,40)||'projekt';
+const lines=s=>String(s||'').split('\n').map(x=>x.trim()).filter(Boolean);
+
+const REFS=[{k:'clean',l:'Clean Plate'},{k:'grid',l:'Lens Grid'},{k:'chart',l:'Farbkarte'},{k:'balls',l:'Grey/Chrome Ball'},{k:'hdri',l:'HDRI'},{k:'witness',l:'Witness Cam'},{k:'markers',l:'Tracking Marker'},{k:'measure',l:'Maße'},{k:'stills',l:'Set-Fotos'},{k:'scan',l:'LiDAR/Scan'},{k:'element',l:'Element/Pass'},{k:'bgplate',l:'BG Plate'}];
+const KINDS=['Cleanup','Set Extension','Sky Replacement','Screen Insert','Green/Blue Screen','CG Integration','Beauty/Retusche','Split Screen','Retime','Crowd','Compositing'];
+const WEATHER=['Sonne','Bewölkt','Wechselnd','Regen','Dämmerung','Nacht','Studio'];
+const CAM_FIELDS=['cam','body','lens','mm','tstop','iso','shutter','fps','filter','kelvin','height','tilt','focus','rig','note'];
+const DL={fps:['23.976','24','25','29.97','48','50','100'],shutter:['180°','172.8°','90°','45°','1/50','1/100'],iso:['400','800','1280','1600','3200'],k:['3200','4300','5600','6500'],filter:['–','ND 0.3','ND 0.6','ND 0.9','ND 1.2','Pol','Black Pro-Mist 1/8','Black Pro-Mist 1/4'],rig:['Stativ','Dolly','Slider','Handheld','Easyrig','Steadicam','Gimbal','Kran','Car Rig','Drohne']};
+
+let db;
+function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open('vfx-setlog',1);
+  r.onupgradeneeded=()=>{const d=r.result;
+    if(!d.objectStoreNames.contains('items'))d.createObjectStore('items',{keyPath:'id'});
+    if(!d.objectStoreNames.contains('photos'))d.createObjectStore('photos',{keyPath:'id'}).createIndex('setup','setupId');
+    if(!d.objectStoreNames.contains('audio'))d.createObjectStore('audio',{keyPath:'id'}).createIndex('setup','setupId');};
+  r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+function txn(stores,mode,fn){return new Promise((res,rej)=>{const t=db.transaction(stores,mode);let out;try{out=fn(t);}catch(e){try{t.abort()}catch{}rej(e);return;}
+  t.oncomplete=()=>res(out&&typeof out==='object'&&'readyState' in out?out.result:out);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error||new Error('Abgebrochen'));});}
+const idb=(store,mode,op)=>txn(store,mode,t=>op(t.objectStore(store)));
+const byCreated=(a,b)=>(a.created||0)-(b.created||0);
+const getPhotos=async sid=>(await idb('photos','readonly',s=>s.index('setup').getAll(sid))).sort(byCreated);
+const getAudio=sid=>idb('audio','readonly',s=>s.index('setup').getAll(sid));
+const S=new Map();
+const kids=(parent,type)=>{const l=[...S.values()].filter(i=>i.parent===parent&&i.type===type);
+  if(type==='day')return l.sort((a,b)=>String(a.date).localeCompare(String(b.date))||(+a.dt||0)-(+b.dt||0)||byCreated(a,b));
+  return l.sort(byCreated);};
+const projectOf=it=>it.type==='project'?it:it.type==='day'?S.get(it.parent):S.get(S.get(it.parent)?.parent);
+const setupsOf=it=>it.type==='setup'?[it]:it.type==='day'?kids(it.id,'setup'):kids(it.id,'day').flatMap(d=>kids(d.id,'setup'));
+const pending=new Set();let saveT;
+const dot=$('#saveDot');
+function touch(it){it.updated=Date.now();pending.add(it.id);dot.className='mono busy';dot.textContent='speichert…';clearTimeout(saveT);saveT=setTimeout(flush,350);}
+async function flush(){clearTimeout(saveT);const ids=[...pending];pending.clear();if(!ids.length)return;
+  try{await idb('items','readwrite',s=>{ids.forEach(id=>{const it=S.get(id);if(it)s.put(it);});});dot.className='mono';dot.textContent='gespeichert';}
+  catch(e){dot.className='mono err';dot.textContent='Fehler!';toast('Speichern fehlgeschlagen: '+(e&&e.message||e));}}
+async function putNow(it){it.updated=Date.now();S.set(it.id,it);await idb('items','readwrite',s=>s.put(it));}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flush();});
+window.addEventListener('pagehide',flush);
+function getPath(o,p){return p.split('.').reduce((a,k)=>a==null?a:a[k],o);}
+function setPath(o,p,v){const ks=p.split('.');let a=o;for(let i=0;i<ks.length-1;i++){const k=ks[i];if(a[k]==null)a[k]=/^\d+$/.test(ks[i+1])?[]:{};a=a[k];}a[ks[ks.length-1]]=v;}
+let toastT;
+function toast(msg){const t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,3200);}
+function F(label,k,val,o={}){const id='f_'+k.replace(/\W/g,'_');const lab=label?`<span>${esc(label)}</span>`:'';
+  const common=`id="${id}" data-k="${esc(k)}" placeholder="${esc(o.ph||'')}" autocomplete="off" autocapitalize="${o.cap||'sentences'}"`;
+  if(o.type==='textarea')return `<label class="fld ${o.cls||''}">${lab}<textarea ${common} rows="${o.rows||3}">${esc(val)}</textarea></label>`;
+  return `<label class="fld ${o.cls||''}">${lab}<input ${common} type="${o.type||'text'}" value="${esc(val)}"${o.list?` list="${o.list}"`:''}${o.mode?` inputmode="${o.mode}"`:''}></label>`;}
+const chip=(k,val,on)=>`<button type="button" class="chip" data-act="toggle" data-k="${esc(k)}" data-val="${esc(val)}" aria-pressed="${!!on}">${esc(val)}</button>`;
+const empty=t=>`<div class="empty">${t}</div>`;
+const opts=a=>a.map(v=>`<option value="${esc(v)}"></option>`).join('');
+const datalists=p=>`<datalist id="dl-cam">${opts(lines(p.camPresets))}</datalist><datalist id="dl-lens">${opts(lines(p.lensPresets))}</datalist><datalist id="dl-fps">${opts(DL.fps)}</datalist><datalist id="dl-shutter">${opts(DL.shutter)}</datalist><datalist id="dl-iso">${opts(DL.iso)}</datalist><datalist id="dl-k">${opts(DL.k)}</datalist><datalist id="dl-filter">${opts(DL.filter)}</datalist><datalist id="dl-rig">${opts(DL.rig)}</datalist>`;
+let nav=[{v:'home'}];
+function go(v,id){flush();nav.push({v,id});render();window.scrollTo(0,0);}
+function back(){flush();stopRec();if(nav.length>1){nav.pop();render();window.scrollTo(0,0);}}
+$('#backBtn').addEventListener('click',back);
+function rerender(){const y=window.scrollY;render();window.scrollTo(0,y);}
+let objURLs=[];
+function render(){
+  objURLs.forEach(u=>URL.revokeObjectURL(u));objURLs=[];
+  let cur=nav[nav.length-1];
+  if(cur.id&&!S.has(cur.id)){nav=[{v:'home'}];cur=nav[0];}
+  const V={home:vHome,project:vProject,day:vDay,setup:vSetup,report:vReport,claude:vClaude}[cur.v]||vHome;
+  const r=V(cur);
+  $('#ttl').textContent=r.title;$('#sub').textContent=r.sub||'';
+  $('#backBtn').hidden=nav.length<2;
+  app.innerHTML=r.html;
+  r.after&&r.after();
+}
+function vHome(){
+  const ps=kids(null,'project').sort((a,b)=>(b.updated||0)-(a.updated||0));
+  const standalone=navigator.standalone||matchMedia('(display-mode: standalone)').matches;
+  return {title:'VFX Setlog',sub:'v'+APP_VERSION+' · lokal auf diesem Gerät',html:`
+  ${standalone?'':`<section class="card install"><h2 class="sec">Offline nutzen</h2><p class="hint">In Safari auf <b>Teilen</b> → <b>Zum Home-Bildschirm</b>. Danach läuft die App offline, und die Daten werden nicht nach 7 Tagen von iOS gelöscht.</p></section>`}
+  <section class="stack"><div class="sec-row"><h2 class="sec">Projekte</h2><span class="meta mono">${ps.length}</span></div>
+  ${ps.map(p=>{const n=kids(p.id,'day').length;return `<button class="row" data-act="open" data-v="project" data-id="${p.id}"><div class="row-main"><strong>${esc(p.name)}</strong><span class="meta">${esc([p.prodnr,p.client].filter(Boolean).join(' · ')||'—')}</span></div><span class="count mono">${n} DT</span></button>`}).join('')||empty('Noch kein Projekt. Leg eins an oder lade ein Backup.')}
+  </section>
+  <div class="btns"><button class="btn primary" data-act="newProject">+ Neues Projekt</button><label class="btn">Backup laden<input class="vh" type="file" accept="application/json,.json" data-file="import"></label></div>
+  <p class="hint" id="storeInfo"></p>`,after:storeInfo};
+}
+async function storeInfo(){const el=$('#storeInfo');if(!el)return;const t=[];
+  try{if(navigator.storage&&navigator.storage.persist){const ok=(await navigator.storage.persisted())||(await navigator.storage.persist());t.push(ok?'Speicher dauerhaft':'Speicher nicht als dauerhaft markiert – regelmäßig Backup sichern');}
+  if(navigator.storage&&navigator.storage.estimate){const e=await navigator.storage.estimate();t.push((e.usage/1e6).toFixed(1)+' MB belegt');}}catch{}
+  el.textContent=t.join(' · ');}
+
+(async()=>{
+  try{db=await openDB();(await idb('items','readonly',s=>s.getAll())).forEach(i=>S.set(i.id,i));}
+  catch(e){app.innerHTML=`<div class="empty">Lokaler Speicher nicht verfügbar (${esc(e.message)}). Privates Surfen ausschalten und neu laden.</div>`;return;}
+  render();
+  if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
+})();
+</script>
+</body>
+</html>
+
