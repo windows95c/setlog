@@ -128,6 +128,45 @@ pre.box{margin:0;max-height:220px;overflow:auto;background:var(--surface2);borde
 .r-photos figcaption{font-size:10.5px;color:#444}
 .r-memo{font-size:12px;color:#333;border-left:3px solid #ccc;padding-left:8px}
 .r-foot{margin-top:16px;color:#777;font-size:10.5px}
+.kv{display:grid;grid-template-columns:max-content 1fr;gap:4px 12px;margin:0;font-size:13px}
+.kv dt{color:var(--muted)}.kv dd{margin:0}
+a.btn{text-decoration:none}
+body.vf-open{overflow:hidden}
+#vf{position:fixed;inset:0;z-index:60;background:#000;color:#eee;display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
+#vfVideo{position:absolute;width:2px;height:2px;opacity:.01;pointer-events:none;top:0;left:0}
+.vf-top{display:flex;gap:6px;align-items:center;padding:6px 8px;overflow-x:auto;flex:none}
+.vf-top select{font:inherit;font-size:14px;color:#eee;background:#1d2024;border:1px solid #333;border-radius:8px;min-height:38px;padding:0 8px;max-width:46vw;flex:0 1 auto;min-width:0}
+.vf-ic{flex:none;width:40px;height:40px;border-radius:20px;border:1px solid #333;background:#1d2024;color:#eee;font-size:18px;cursor:pointer}
+.vf-stage{position:relative;flex:1;min-height:0}
+#vfCanvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.vf-info{position:absolute;left:8px;right:8px;bottom:6px;font-size:11px;color:#f0b23a;text-shadow:0 1px 2px #000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+.vf-warn{position:absolute;left:8px;right:8px;top:8px;background:rgba(179,38,30,.88);color:#fff;font-size:13px;padding:6px 10px;border-radius:8px;text-align:center}
+.vf-flash{position:absolute;inset:0;background:#fff;opacity:.6;pointer-events:none}
+.vf-bot{flex:none;display:flex;flex-direction:column;gap:6px;padding:6px 0 8px}
+.vf-focals{display:flex;gap:6px;overflow-x:auto;padding:0 8px;scrollbar-width:none}
+.vf-focals::-webkit-scrollbar{display:none}
+.vf-mm{flex:none;min-width:46px;height:40px;border-radius:20px;border:1px solid #333;background:#1d2024;color:#ddd;font:600 15px var(--mono);cursor:pointer}
+.vf-mm.own{border-color:#6b5320}
+.vf-mm[aria-pressed="true"]{background:#f0b23a;color:#111;border-color:#f0b23a}
+.vf-row{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 16px}
+.vf-thumb{width:48px;height:48px;border-radius:8px;background:#1d2024 center/cover no-repeat;border:1px solid #333}
+.vf-count{justify-self:end;font-size:12px;color:#aaa}
+.vf-shutter{width:68px;height:68px;border-radius:50%;border:4px solid #fff;background:#f0b23a;cursor:pointer}
+.vf-shutter:active{transform:scale(.94)}
+.vf-set{position:absolute;left:0;right:0;bottom:0;background:#16191c;color:#eee;border-radius:16px 16px 0 0;padding:16px max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:10px;max-height:80%;overflow:auto;z-index:2}
+.vf-set input,.vf-set select{background:#23272c;color:#eee;font:inherit;font-size:16px;border-radius:8px;border:1px solid #333;padding:10px;min-height:44px}
+.vf-set .hint{color:#9aa}
+.vf-set .btn{background:#23272c;color:#eee;border-color:#333}.vf-set .btn.primary{background:#f0b23a;color:#111;border-color:#f0b23a}
+@media (orientation:landscape) and (max-height:500px){
+  #vf{display:grid;grid-template-columns:1fr 150px;grid-template-rows:auto 1fr}
+  .vf-top{grid-column:1/3}
+  .vf-stage{grid-row:2;grid-column:1}
+  .vf-bot{grid-row:2;grid-column:2;flex-direction:row;padding:0 6px 6px 0;gap:6px;min-height:0}
+  .vf-focals{flex-direction:column;overflow-y:auto;overflow-x:hidden;padding:0;width:56px}
+  .vf-row{display:flex;flex-direction:column;justify-content:center;gap:12px;padding:0;flex:1}
+  .vf-count{justify-self:auto}
+}
 @media print{
   @page{margin:12mm}
   body{background:#fff;padding:0}
@@ -156,7 +195,7 @@ window.addEventListener('unhandledrejection',function(e){var r=e.reason;window._
 </script>
 <script>
 'use strict';
-const APP_VERSION='1.0.1';
+const APP_VERSION='1.1.0';
 const $=s=>document.querySelector(s);
 const app=$('#app');
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -203,7 +242,7 @@ const S=new Map();
 const kids=(parent,type)=>{const l=[...S.values()].filter(i=>i.parent===parent&&i.type===type);
   if(type==='day')return l.sort((a,b)=>String(a.date).localeCompare(String(b.date))||(+a.dt||0)-(+b.dt||0)||byCreated(a,b));
   return l.sort(byCreated);};
-const projectOf=it=>it.type==='project'?it:it.type==='day'?S.get(it.parent):S.get(S.get(it.parent)?.parent);
+const projectOf=it=>it.type==='project'?it:(it.type==='day'||it.type==='loc')?S.get(it.parent):S.get(S.get(it.parent)?.parent);
 const setupsOf=it=>it.type==='setup'?[it]:it.type==='day'?kids(it.id,'setup'):kids(it.id,'day').flatMap(d=>kids(d.id,'setup'));
 
 /* ---------- Save ---------- */
@@ -243,7 +282,7 @@ function render(){
   objURLs.forEach(u=>URL.revokeObjectURL(u));objURLs=[];
   let cur=nav[nav.length-1];
   if(cur.id&&!S.has(cur.id)){nav=[{v:'home'}];cur=nav[0];}
-  const V={home:vHome,project:vProject,day:vDay,setup:vSetup,report:vReport,claude:vClaude}[cur.v]||vHome;
+  const V={home:vHome,project:vProject,day:vDay,setup:vSetup,report:vReport,claude:vClaude,loc:vLoc}[cur.v]||vHome;
   const r=V(cur);
   $('#ttl').textContent=r.title;$('#sub').textContent=r.sub||'';
   $('#backBtn').hidden=nav.length<2;
@@ -258,7 +297,7 @@ function vHome(){
   return {title:'VFX Setlog',sub:'v'+APP_VERSION+' · lokal auf diesem Gerät',html:`
   ${standalone?'':`<section class="card install"><h2 class="sec">Offline nutzen</h2><p class="hint">In Safari auf <b>Teilen</b> → <b>Zum Home-Bildschirm</b>. Danach läuft die App offline, und die Daten werden nicht nach 7 Tagen von iOS gelöscht.</p></section>`}
   <section class="stack"><div class="sec-row"><h2 class="sec">Projekte</h2><span class="meta mono">${ps.length}</span></div>
-  ${ps.map(p=>{const n=kids(p.id,'day').length;return `<button class="row" data-act="open" data-v="project" data-id="${p.id}"><div class="row-main"><strong>${esc(p.name)}</strong><span class="meta">${esc([p.prodnr,p.client].filter(Boolean).join(' · ')||'—')}</span></div><span class="count mono">${n} DT</span></button>`}).join('')||empty('Noch kein Projekt. Leg eins an oder lade ein Backup.')}
+  ${ps.map(p=>{const n=kids(p.id,'day').length,nl_=kids(p.id,'loc').length;return `<button class="row" data-act="open" data-v="project" data-id="${p.id}"><div class="row-main"><strong>${esc(p.name)}</strong><span class="meta">${esc([p.prodnr,p.client].filter(Boolean).join(' · ')||'—')}</span></div><span class="count mono">${n} DT${nl_?` · ${nl_} Loc`:''}</span></button>`}).join('')||empty('Noch kein Projekt. Leg eins an oder lade ein Backup.')}
   </section>
   <div class="btns"><button class="btn primary" data-act="newProject">+ Neues Projekt</button><label class="btn">Backup laden<input class="vh" type="file" accept="application/json,.json" data-file="import"></label></div>
   <p class="hint" id="storeInfo"></p>`,after:storeInfo};
@@ -270,7 +309,7 @@ async function storeInfo(){const el=$('#storeInfo');if(!el)return;const t=[];
 
 function vProject(cur){
   const p=S.get(cur.id);const days=kids(p.id,'day');const nSet=setupsOf(p).length;
-  const memoOpen=setupsOf(p).reduce((n,s)=>n+(s.memos||[]).filter(m=>!m.done&&m.text.trim()).length,0);
+  const memoOpen=[...setupsOf(p),...locsOf(p)].reduce((n,s)=>n+(s.memos||[]).filter(m=>!m.done&&m.text.trim()).length,0);
   return {title:p.name,sub:[p.prodnr,p.client].filter(Boolean).join(' · '),html:`
   <section class="card" data-item="${p.id}"><h2 class="sec">Projekt</h2><div class="grid">
     ${F('Projektname','name',p.name,{cls:'span2'})}
@@ -279,6 +318,9 @@ function vProject(cur){
     ${F('VFX Supervisor','sup',p.sup,{cap:'words'})}${F('Regie','director',p.director,{cap:'words'})}
     ${F('DOP','dop',p.dop,{cap:'words'})}${F('Projekt-FPS','fps',p.fps,{mode:'decimal',list:'dl-fps'})}
   </div><datalist id="dl-fps">${opts(DL.fps)}</datalist></section>
+  <section class="stack"><div class="sec-row"><h2 class="sec">Tech Recce &amp; Locations</h2><span class="meta mono">${locsOf(p).length}</span></div>
+    ${locsOf(p).map(locRow).join('')||empty('Noch keine Location. Für Recce und Scouting: Fotos mit Objektiv-Simulation, Sonnenstand, Check-Liste.')}
+    <button class="btn block" data-act="newLoc" data-id="${p.id}">+ Location / Recce</button></section>
   <section class="stack"><div class="sec-row"><h2 class="sec">Drehtage</h2><span class="meta mono">${days.length} DT · ${nSet} Setups</span></div>
     ${days.map(dayRow).join('')||empty('Noch kein Drehtag angelegt.')}
     <button class="btn primary block" data-act="newDay" data-id="${p.id}">+ Drehtag</button></section>
@@ -343,6 +385,7 @@ function vSetup(cur){
 
   <section class="card" data-item="${s.id}"><div class="sec-row"><h2 class="sec">Fotos</h2><span class="meta mono" id="phCount">${s.photoCount||0}</span></div>
     <div id="photos" class="photos"></div>
+    <button class="btn block" data-act="finder" data-id="${s.id}">◫ Sucher – Objektiv simulieren</button>
     <div class="btns"><label class="btn">Foto aufnehmen<input class="vh" type="file" accept="image/*" capture="environment" data-file="photo"></label><label class="btn">Aus Mediathek<input class="vh" type="file" accept="image/*" multiple data-file="photo"></label></div></section>
 
   <section class="card" data-item="${s.id}"><h2 class="sec">Notizen</h2>${F('','notes',s.notes,{type:'textarea',rows:4,ph:'Alles, was Comp später wissen muss'})}</section>
@@ -419,19 +462,226 @@ async function toggleRec(s,btn){
   mr.start(1000);}
 function stopRec(){if(rec){try{rec.mr.stop()}catch{}}}
 
+/* ---------- Locations / Tech Recce ---------- */
+const LOC_FLAGS=['Strom vor Ort','Parken','Basecamp-Fläche','WC','Genehmigung nötig','Drohne erlaubt','Lärm / Verkehr','Handynetz','Greenscreen möglich','Rigging möglich','Sonne geprüft','Wetterschutz'];
+const LOC_KINDS=['Tech Recce','Location Scout'];
+const locsOf=p=>kids(p.id,'loc');
+function locRow(l){const m=(l.memos||[]).filter(x=>!x.done&&x.text.trim()).length;
+  const info=[l.photoCount?`${l.photoCount} Foto`:'',m?`${m} Memo`:''].filter(Boolean).join(' · ')||'—';
+  return `<button class="row" data-act="open" data-v="loc" data-id="${l.id}"><span class="badge mono">${esc(l.kind==='Location Scout'?'SCOUT':'RECCE')}</span><div class="row-main"><strong>${esc(l.name||'Ohne Namen')}</strong><span class="meta">${esc([l.date&&fmtDate(l.date),l.address&&l.address.split('\n')[0]].filter(Boolean).join(' · ')||'—')}</span></div><span class="count mono">${info}</span></button>`;}
+function parseGPS(s){const m=String(s||'').replace(/,/g,' ').match(/(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)/);if(!m)return null;const lat=+m[1],lon=+m[2];return Math.abs(lat)<=90&&Math.abs(lon)<=180?{lat,lon}:null;}
+function vLoc(cur){
+  const l=S.get(cur.id),p=S.get(l.parent);const g=parseGPS(l.gps);
+  return {title:l.name||'Location',sub:`${l.kind||'Tech Recce'} · ${p.name}`,html:`
+  <section class="card" data-item="${l.id}">
+    <div class="chips">${LOC_KINDS.map(k=>`<button type="button" class="chip" data-act="setKind" data-val="${k}" aria-pressed="${(l.kind||'Tech Recce')===k}">${k}</button>`).join('')}</div>
+    <div class="grid">
+    ${F('Location / Motiv','name',l.name,{cls:'span2'})}
+    ${F('Datum','date',l.date,{type:'date'})}${F('Uhrzeit','time',l.time,{type:'time'})}
+    ${F('Adresse','address',l.address,{type:'textarea',rows:2,cls:'span2'})}
+    ${F('Kontakt vor Ort','contact',l.contact,{cls:'span2',ph:'Name, Telefon'})}
+    ${F('GPS (Lat, Lon)','gps',l.gps,{cls:'span2 mono-in',ph:'13.7563, 100.5018',cap:'off'})}</div>
+    <div class="btns"><button class="btn" data-act="gps">◎ Position übernehmen</button>${g?`<a class="btn" href="https://maps.apple.com/?ll=${g.lat},${g.lon}&q=${encodeURIComponent(l.name||'Location')}" target="_blank" rel="noopener">In Karten öffnen</a>`:''}</div></section>
+
+  <section class="card"><div class="sec-row"><h2 class="sec">Sonnenstand</h2><span class="meta mono">${esc(tzLabel())}</span></div><div id="sunBox">${sunHTML(l)}</div></section>
+
+  <section class="card" data-item="${l.id}"><div class="sec-row"><h2 class="sec">Fotos</h2><span class="meta mono" id="phCount">${l.photoCount||0}</span></div>
+    <div id="photos" class="photos"></div>
+    <button class="btn primary block" data-act="finder" data-id="${l.id}">◫ Sucher – Objektiv simulieren</button>
+    <div class="btns"><label class="btn">iPhone-Kamera<input class="vh" type="file" accept="image/*" capture="environment" data-file="photo"></label><label class="btn">Aus Mediathek<input class="vh" type="file" accept="image/*" multiple data-file="photo"></label></div></section>
+
+  <section class="card" data-item="${l.id}"><h2 class="sec">Check</h2>
+    <div class="chips">${LOC_FLAGS.map(k=>chip('flags',k,(l.flags||[]).includes(k))).join('')}</div>
+    <div class="grid">
+    ${F('Zugang / Logistik','access',l.access,{type:'textarea',rows:2,cls:'span2',ph:'Anfahrt, Ladewege, Aufzug, Parken'})}
+    ${F('Strom','power',l.power,{type:'textarea',rows:2,cls:'span2',ph:'Anschlüsse, Ampere, Aggregat nötig?'})}
+    ${F('Ton','sound',l.sound,{type:'textarea',rows:2,cls:'span2',ph:'Verkehr, Klima, Flugzeuge, Glocken'})}
+    ${F('Licht','light',l.light,{type:'textarea',rows:2,cls:'span2',ph:'Fensterrichtung, Schatten, Kunstlicht'})}
+    ${F('VFX','vfx',l.vfx,{type:'textarea',rows:3,cls:'span2',ph:'Cleanups, Set Extension, Sky, Marker-Möglichkeiten, Maße, Scan/HDRI-Plan'})}
+    ${F('Notizen','notes',l.notes,{type:'textarea',rows:3,cls:'span2'})}</div></section>
+
+  <section class="card" data-item="${l.id}"><div class="sec-row"><h2 class="sec">Memos</h2><span class="meta mono">${(l.memos||[]).length}</span></div>
+    <p class="hint">Text per Diktiertaste (offline). Aufnahme speichert zusätzlich Audio.</p>
+    <div id="memos">${(l.memos||[]).map(memoRow).join('')}</div>
+    <div class="btns"><button class="btn" data-act="addMemo">+ Text-Memo</button><button class="btn" id="recBtn" data-act="rec">● Aufnahme</button></div></section>
+
+  <div class="btns"><button class="btn" data-act="report" data-id="${l.id}">Recce-Report (PDF)</button><button class="btn ghost-danger" data-act="del" data-id="${l.id}">Location löschen</button></div>`,
+  after:()=>{fillPhotos(l);fillAudio(l);}};
+}
+
+/* ---------- Sun ---------- */
+const RAD=Math.PI/180;
+function sunPos(date,lat,lon){const n=date.getTime()/86400000+2440587.5-2451545.0;
+  const L=((280.460+0.9856474*n)%360+360)%360,g=(((357.528+0.9856003*n)%360+360)%360)*RAD;
+  const lam=(L+1.915*Math.sin(g)+0.020*Math.sin(2*g))*RAD,eps=(23.439-0.0000004*n)*RAD;
+  const ra=Math.atan2(Math.cos(eps)*Math.sin(lam),Math.cos(lam)),dec=Math.asin(Math.sin(eps)*Math.sin(lam));
+  const gmst=((18.697374558+24.06570982441908*n)%24+24)%24;const H=(gmst*15+lon)*RAD-ra;const la=lat*RAD;
+  const el=Math.asin(Math.sin(la)*Math.sin(dec)+Math.cos(la)*Math.cos(dec)*Math.cos(H));
+  const az=Math.atan2(-Math.sin(H),Math.tan(dec)*Math.cos(la)-Math.sin(la)*Math.cos(H));
+  return {az:(az/RAD+360)%360,el:el/RAD};}
+function sunDay(dateStr,lat,lon){const base=new Date((dateStr||today())+'T00:00');if(isNaN(base))return null;
+  const ev={};let prev=null,max={el:-99};
+  const cross=(k,a,b,t,up)=>{if(a<k&&b>=k&&up)return true;if(a>=k&&b<k&&!up)return true;return false;};
+  for(let m=0;m<=1440;m+=2){const t=new Date(base.getTime()+m*60000);const s=sunPos(t,lat,lon);
+    if(s.el>max.el)max={el:s.el,az:s.az,t};
+    if(prev){[['rise',-0.833,1],['set',-0.833,0],['g1',6,1],['g2',6,0],['b1',-4,1],['b2',-4,0],['c1',-6,1],['c2',-6,0]].forEach(([k,lv,up])=>{if(!ev[k]&&cross(lv,prev.el,s.el,t,up))ev[k]={t,az:s.az};});}
+    prev=s;}
+  return {ev,max};}
+const hm=t=>t?t.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}):'–';
+const compass=a=>['N','NNO','NO','ONO','O','OSO','SO','SSO','S','SSW','SW','WSW','W','WNW','NW','NNW'][Math.round(a/22.5)%16];
+const deg=a=>`${Math.round(a)}° ${compass(a)}`;
+function tzLabel(){const o=-new Date().getTimezoneOffset()/60;return 'Gerätezeit UTC'+(o>=0?'+':'')+o;}
+function sunHTML(l){const g=parseGPS(l.gps);if(!g)return '<p class="hint">GPS eintragen oder „Position übernehmen“, dann erscheinen Sonnenzeiten und -richtung.</p>';
+  const d=sunDay(l.date,g.lat,g.lon);if(!d)return '';const e=d.ev;
+  const now=l.time&&l.date?new Date(l.date+'T'+l.time):null;const sp=now&&!isNaN(now)?sunPos(now,g.lat,g.lon):null;
+  const rows=[['Blaue Stunde',e.c1&&e.b1?`${hm(e.c1.t)}–${hm(e.b1.t)}`:'–'],['Sonnenaufgang',e.rise?`${hm(e.rise.t)} · ${deg(e.rise.az)}`:'–'],['Golden Hour',e.b1&&e.g1?`${hm(e.b1.t)}–${hm(e.g1.t)}`:'–'],
+    ['Höchststand',`${hm(d.max.t)} · ${Math.round(d.max.el)}° hoch · ${deg(d.max.az)}`],['Golden Hour',e.g2&&e.b2?`${hm(e.g2.t)}–${hm(e.b2.t)}`:'–'],['Sonnenuntergang',e.set?`${hm(e.set.t)} · ${deg(e.set.az)}`:'–'],['Blaue Stunde',e.b2&&e.c2?`${hm(e.b2.t)}–${hm(e.c2.t)}`:'–']];
+  if(sp)rows.push([`Um ${l.time}`,sp.el>0?`${deg(sp.az)} · ${Math.round(sp.el)}° hoch`:'Sonne unter Horizont']);
+  return `<dl class="kv mono">${rows.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl><p class="hint">Azimut = Himmelsrichtung, aus der die Sonne kommt. Zeiten für ${esc(fmtDate(l.date))}, ohne Gelände/Gebäude.</p>`;}
+
+/* ---------- Viewfinder (lens simulation) ---------- */
+const SENSORS=[
+  {id:'a35og',l:'ALEXA 35 · 4.6K 3:2 Open Gate',w:27.99,h:19.22},
+  {id:'a35uhd',l:'ALEXA 35 · 4K 16:9',w:24.88,h:14.00},
+  {id:'a3565',l:'ALEXA 35 · 3.3K 6:5 (Anamorph)',w:20.22,h:16.95},
+  {id:'lfog',l:'ALEXA Mini LF · 4.5K Open Gate',w:36.70,h:25.54},
+  {id:'lfuhd',l:'ALEXA Mini LF · UHD 16:9',w:31.68,h:17.82},
+  {id:'s35',l:'Super 35 · 4-perf',w:24.89,h:18.66},
+  {id:'ff',l:'Vollformat 36 × 24',w:36,h:24},
+  {id:'venice',l:'Sony VENICE 2 · 8.6K 3:2',w:36.2,h:24.1},
+  {id:'raptor',l:'RED V-RAPTOR · 8K VV 17:9',w:40.96,h:21.6},
+  {id:'mft',l:'Micro Four Thirds',w:17.3,h:13}];
+const SQUEEZE=[1,1.3,1.5,1.65,1.8,2];
+const ASPECTS=[[0,'Sensor'],[2.39,'2.39:1'],[2,'2:1'],[1.85,'1.85:1'],[1.7778,'16:9'],[1.3333,'4:3'],[1,'1:1'],[0.8,'4:5'],[0.5625,'9:16']];
+const FOCALS=[12,14,16,18,21,25,29,32,35,40,50,65,75,85,100,135,180];
+const VF_KEY='setlog-vf';
+let vf={on:false};
+function vfLoad(){let s={};try{s=JSON.parse(localStorage.getItem(VF_KEY)||'{}')||{};}catch{}return Object.assign({sensor:'a35og',sq:1,ar:2.39,mm:35,hfov:{},lines:true},s);}
+function vfSave(){try{localStorage.setItem(VF_KEY,JSON.stringify({sensor:vf.s.sensor,sq:vf.s.sq,ar:vf.s.ar,mm:vf.s.mm,hfov:vf.s.hfov,lines:vf.s.lines,dev:vf.s.dev}));}catch{}}
+function defHfov(label){label=String(label||'');if(/ultra|weitwinkel/i.test(label))return 106;if(/tele/i.test(label))return 36.8;return 67.2;}
+const curHfov=()=>{const k=vf.label||'default';return +vf.s.hfov[k]||defHfov(vf.label);};
+const sensorObj=()=>SENSORS.find(x=>x.id===vf.s.sensor)||SENSORS[0];
+function projectFocals(p){const set=new Set();lines(p&&p.lensPresets).forEach(x=>{const m=x.match(/(\d+(?:[.,]\d+)?)\s*mm/i);if(m)set.add(+m[1].replace(',','.'));});return [...set].sort((a,b)=>a-b);}
+function vfGeom(W,H){const sen=sensorObj(),sq=+vf.s.sq||1,mm=Math.max(1,+vf.s.mm||35);
+  const fpx=(Math.max(W,H)/2)/Math.tan(curHfov()*RAD/2);
+  const cw=fpx*sen.w*sq/mm,ch=fpx*sen.h/mm;
+  return {cw,ch,cx:(W-cw)/2,cy:(H-ch)/2,cover:cw<=W*1.005&&ch<=H*1.005,hf:2*Math.atan(sen.w*sq/2/mm)/RAD,vfv:2*Math.atan(sen.h/2/mm)/RAD,res:Math.round(Math.min(cw,W))};}
+function fitRect(aw,ah,bw,bh){const k=Math.min(bw/aw,bh/ah);const w=aw*k,h=ah*k;return {x:(bw-w)/2,y:(bh-h)/2,w,h};}
+function drawCrop(ctx,v,W,H,g,dx,dy,dw,dh){ctx.fillStyle='#000';ctx.fillRect(dx,dy,dw,dh);
+  const sx0=Math.max(0,g.cx),sy0=Math.max(0,g.cy),sx1=Math.min(W,g.cx+g.cw),sy1=Math.min(H,g.cy+g.ch);if(sx1<=sx0||sy1<=sy0)return;
+  const kx=dw/g.cw,ky=dh/g.ch;ctx.drawImage(v,sx0,sy0,sx1-sx0,sy1-sy0,dx+(sx0-g.cx)*kx,dy+(sy0-g.cy)*ky,(sx1-sx0)*kx,(sy1-sy0)*ky);}
+function drawLines(ctx,r,lw){const ar=+vf.s.ar;const capA=r.w/r.h;let f=r;
+  if(ar){f=ar>capA?{w:r.w,h:r.w/ar}:{w:r.h*ar,h:r.h};f.x=r.x+(r.w-f.w)/2;f.y=r.y+(r.h-f.h)/2;
+    ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(r.x,r.y,r.w,f.y-r.y);ctx.fillRect(r.x,f.y+f.h,r.w,r.y+r.h-f.y-f.h);ctx.fillRect(r.x,f.y,f.x-r.x,f.h);ctx.fillRect(f.x+f.w,f.y,r.x+r.w-f.x-f.w,f.h);
+    ctx.strokeStyle='rgba(255,255,255,.9)';ctx.lineWidth=lw;ctx.strokeRect(f.x,f.y,f.w,f.h);}
+  if(vf.s.lines){ctx.strokeStyle='rgba(255,255,255,.35)';ctx.lineWidth=lw*.7;ctx.beginPath();
+    for(let i=1;i<3;i++){ctx.moveTo(f.x+f.w*i/3,f.y);ctx.lineTo(f.x+f.w*i/3,f.y+f.h);ctx.moveTo(f.x,f.y+f.h*i/3);ctx.lineTo(f.x+f.w,f.y+f.h*i/3);}ctx.stroke();}
+  const c=Math.min(f.w,f.h)*.03;ctx.strokeStyle='rgba(255,255,255,.85)';ctx.lineWidth=lw;ctx.beginPath();ctx.moveTo(f.x+f.w/2-c,f.y+f.h/2);ctx.lineTo(f.x+f.w/2+c,f.y+f.h/2);ctx.moveTo(f.x+f.w/2,f.y+f.h/2-c);ctx.lineTo(f.x+f.w/2,f.y+f.h/2+c);ctx.stroke();}
+function vfLabel(g){const sen=sensorObj();const sq=+vf.s.sq||1;const ar=ASPECTS.find(a=>a[0]==vf.s.ar);
+  return `${vf.s.mm}mm${sq>1?' · '+sq+'x anamorph':''} · ${sen.l} · ${ar?ar[1]:''} · HFOV ${g.hf.toFixed(1)}°`;}
+function vfHeading(){if(vf.heading==null)return null;return (vf.heading+360)%360;}
+
+function finderHTML(p){const pf=projectFocals(p);const all=[...new Set([...pf,...FOCALS])].sort((a,b)=>a-b);
+  return `<div id="vf" role="dialog" aria-label="Sucher">
+  <video id="vfVideo" playsinline muted autoplay></video>
+  <div class="vf-top"><button class="vf-ic" data-vf="close" aria-label="Schließen">✕</button>
+    <select id="vfSensor" aria-label="Sensorformat">${SENSORS.map(s=>`<option value="${s.id}"${s.id===vf.s.sensor?' selected':''}>${esc(s.l)}</option>`).join('')}</select>
+    <select id="vfSq" aria-label="Squeeze">${SQUEEZE.map(q=>`<option value="${q}"${q==vf.s.sq?' selected':''}>${q===1?'Sphärisch':q+'x Anamorph'}</option>`).join('')}</select>
+    <select id="vfAr" aria-label="Framelines">${ASPECTS.map(a=>`<option value="${a[0]}"${a[0]==vf.s.ar?' selected':''}>${a[1]}</option>`).join('')}</select>
+    <button class="vf-ic" data-vf="set" aria-label="Einstellungen">⚙</button></div>
+  <div class="vf-stage"><canvas id="vfCanvas"></canvas><div id="vfInfo" class="vf-info mono"></div><div id="vfWarn" class="vf-warn" hidden></div><div id="vfFlash" class="vf-flash" hidden></div></div>
+  <div class="vf-bot">
+    <div class="vf-focals" id="vfFocals">${all.map(m=>`<button class="vf-mm${pf.includes(m)?' own':''}" data-mm="${m}" aria-pressed="${m==vf.s.mm}">${m}</button>`).join('')}</div>
+    <div class="vf-row"><div class="vf-thumb" id="vfThumb"></div><button class="vf-shutter" data-vf="shoot" aria-label="Foto aufnehmen"></button><div class="vf-count mono" id="vfCount"></div></div>
+  </div>
+  <div class="vf-set" id="vfSet" hidden>
+    <label class="fld"><span>Eigene Brennweite (mm)</span><input id="vfMm" type="number" inputmode="decimal" value="${esc(vf.s.mm)}"></label>
+    <label class="fld" id="vfCamWrap" hidden><span>iPhone-Kamera</span><select id="vfCam"></select></label>
+    <label class="fld"><span>Kalibrierung: horizontaler Bildwinkel dieser iPhone-Kamera (°)</span><input id="vfHf" type="number" inputmode="decimal" step="0.1" value="${curHfov()}"></label>
+    <p class="hint">iPhone 12 Hauptkamera ≈ 67°, Ultra-Weitwinkel ≈ 106°. Prüfen: Objekt mit Breite B aus Abstand D bildfüllend → 2·atan(B/2D).</p>
+    <div class="btns"><button class="btn" data-vf="lines">Drittel-Linien: ${vf.s.lines?'an':'aus'}</button><button class="btn" data-vf="compass">${vf.heading!=null?'Kompass an':'Kompass aktivieren'}</button></div>
+    <button class="btn primary block" data-vf="setclose">Fertig</button></div>
+  </div>`;}
+async function vfOpen(item){if(vf.on)return;const p=projectOf(item);vf={on:true,item,s:vfLoad(),heading:vf.heading??null,shots:0};
+  document.body.insertAdjacentHTML('beforeend',finderHTML(p));document.body.classList.add('vf-open');
+  vf.el=$('#vf');vf.video=$('#vfVideo');vf.canvas=$('#vfCanvas');
+  vf.el.addEventListener('click',vfClick);vf.el.addEventListener('change',vfChange);vf.el.addEventListener('input',vfInput);
+  vf.onResize=()=>vfSize();window.addEventListener('resize',vf.onResize);
+  vf.onVis=()=>{if(document.visibilityState==='hidden')vfClose();};document.addEventListener('visibilitychange',vf.onVis);
+  vfSize();await vfStart();vfLoop();vfScrollFocal();}
+async function vfStart(){vfStop(true);
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){vfWarn('Kamera wird in diesem Browser nicht unterstützt. App vom Home-Bildschirm in Safari öffnen.');return;}
+  const v={width:{ideal:3840},height:{ideal:2160}};if(vf.s.dev)v.deviceId={exact:vf.s.dev};else v.facingMode={ideal:'environment'};
+  try{vf.stream=await navigator.mediaDevices.getUserMedia({audio:false,video:v});}
+  catch(e){if(vf.s.dev){vf.s.dev='';return vfStart();}vfWarn('Kein Kamerazugriff: '+(e.message||e.name)+'. Einstellungen → Safari → Kamera → Erlauben.');return;}
+  vf.video.srcObject=vf.stream;try{await vf.video.play();}catch{}
+  const tr=vf.stream.getVideoTracks()[0];vf.label=tr&&tr.label||'';
+  try{const devs=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput'&&!/front|vorder/i.test(d.label));
+    if(devs.length>1){const sel=$('#vfCam');sel.innerHTML=devs.map(d=>`<option value="${esc(d.deviceId)}"${d.label===vf.label?' selected':''}>${esc(d.label||'Kamera')}</option>`).join('');$('#vfCamWrap').hidden=false;}}catch{}
+  const hf=$('#vfHf');if(hf)hf.value=curHfov();}
+function vfStop(keep){if(vf.stream){vf.stream.getTracks().forEach(t=>t.stop());vf.stream=null;}if(!keep&&vf.raf)cancelAnimationFrame(vf.raf);}
+function vfClose(){if(!vf.on)return;vf.on=false;vfStop();window.removeEventListener('resize',vf.onResize);document.removeEventListener('visibilitychange',vf.onVis);
+  if(vf.onOri)window.removeEventListener('deviceorientation',vf.onOri);vf.el&&vf.el.remove();document.body.classList.remove('vf-open');const n=vf.shots;vfSave();
+  if(n){rerender();toast(`${n} Sucher-Foto${n>1?'s':''} gespeichert`);}}
+function vfSize(){const c=vf.canvas;if(!c)return;const r=c.parentElement.getBoundingClientRect();const d=window.devicePixelRatio||1;c.width=Math.round(r.width*d);c.height=Math.round(r.height*d);c.style.width=r.width+'px';c.style.height=r.height+'px';}
+function vfWarn(t){const w=$('#vfWarn');if(!w)return;w.textContent=t||'';w.hidden=!t;}
+function vfLoop(){if(!vf.on)return;const v=vf.video,c=vf.canvas,ctx=c.getContext('2d');const W=v.videoWidth,H=v.videoHeight;
+  if(W&&H&&c.width){const g=vfGeom(W,H);const r=fitRect(g.cw,g.ch,c.width,c.height);ctx.fillStyle='#000';ctx.fillRect(0,0,c.width,c.height);
+    drawCrop(ctx,v,W,H,g,r.x,r.y,r.w,r.h);drawLines(ctx,r,Math.max(1.5,(window.devicePixelRatio||1)));
+    const hd=vfHeading();const info=vfLabel(g)+(hd!=null?` · ${deg(hd)}`:'');if(vf.lastInfo!==info){$('#vfInfo').textContent=info;vf.lastInfo=info;}
+    const portrait=H>W&&(g.cw>g.ch);
+    const warn=portrait?'iPhone quer halten (Ausrichtungssperre aus).':!g.cover?'Weiter als die iPhone-Kamera – Ränder fehlen. Ultra-Weitwinkel wählen (⚙), falls vorhanden.':g.res<700?`Starker Crop (${g.res}px) – Bild wird weich.`:'';
+    if(vf.lastWarn!==warn){vfWarn(warn);vf.lastWarn=warn;}}
+  vf.raf=requestAnimationFrame(vfLoop);}
+function vfScrollFocal(){const b=document.querySelector(`.vf-mm[aria-pressed="true"]`);if(b)try{b.scrollIntoView({inline:'center',block:'nearest'});}catch{}}
+function vfSetMm(m){vf.s.mm=+m;document.querySelectorAll('.vf-mm').forEach(b=>b.setAttribute('aria-pressed',b.dataset.mm==m));const i=$('#vfMm');if(i)i.value=m;vfSave();}
+async function vfShoot(){const v=vf.video;const W=v.videoWidth,H=v.videoHeight;if(!W)return;
+  const g=vfGeom(W,H);const outW=Math.round(Math.min(2400,Math.max(1600,g.cw)));const outH=Math.round(outW*g.ch/g.cw);const bar=Math.round(outW*0.032);
+  const c=document.createElement('canvas');c.width=outW;c.height=outH+bar;const ctx=c.getContext('2d');ctx.imageSmoothingQuality='high';
+  drawCrop(ctx,v,W,H,g,0,0,outW,outH);drawLines(ctx,{x:0,y:0,w:outW,h:outH},Math.max(2,outW/900));
+  const hd=vfHeading();const now=new Date();
+  const txt=`${vfLabel(g)}${hd!=null?' · Blick '+deg(hd):''} · ${fmtDT(now.getTime())}`;
+  ctx.fillStyle='#111';ctx.fillRect(0,outH,outW,bar);ctx.fillStyle='#f0b23a';ctx.font=`600 ${Math.round(bar*.5)}px -apple-system,Helvetica,Arial,sans-serif`;ctx.textBaseline='middle';
+  let fs=Math.round(bar*.5);while(ctx.measureText(txt).width>outW-bar&&fs>8){fs--;ctx.font=`600 ${fs}px -apple-system,Helvetica,Arial,sans-serif`;}ctx.fillText(txt,bar*.5,outH+bar/2);
+  const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.86));if(!blob){toast('Foto fehlgeschlagen');return;}
+  const sen=sensorObj();const meta={mm:+vf.s.mm,sensor:sen.l,sq:+vf.s.sq,ar:+vf.s.ar,hfov:+g.hf.toFixed(1),heading:hd!=null?Math.round(hd):null};
+  const ph={id:uid(),setupId:vf.item.id,buf:await blob.arrayBuffer(),type:'image/jpeg',caption:`${meta.mm}mm${meta.sq>1?' '+meta.sq+'x':''} · ${(ASPECTS.find(a=>a[0]==meta.ar)||[0,''])[1]}`,meta,created:Date.now()};
+  await idb('photos','readwrite',st=>st.put(ph));vf.item.photoCount=(vf.item.photoCount||0)+1;touch(vf.item);vf.shots++;
+  const f=$('#vfFlash');f.hidden=false;setTimeout(()=>f.hidden=true,120);
+  const u=URL.createObjectURL(blob);const th=$('#vfThumb');if(th){if(th.dataset.u)URL.revokeObjectURL(th.dataset.u);th.dataset.u=u;th.style.backgroundImage=`url(${u})`;}
+  $('#vfCount').textContent=vf.shots+' neu';}
+async function vfCompass(btn){
+  try{if(window.DeviceOrientationEvent&&typeof DeviceOrientationEvent.requestPermission==='function'){const r=await DeviceOrientationEvent.requestPermission();if(r!=='granted'){toast('Kompass nicht erlaubt');return;}}}catch(e){toast('Kompass: '+e.message);return;}
+  vf.onOri=e=>{if(typeof e.webkitCompassHeading==='number')vf.heading=e.webkitCompassHeading;else if(e.absolute&&e.alpha!=null)vf.heading=(360-e.alpha)%360;};
+  window.addEventListener('deviceorientation',vf.onOri);btn.textContent='Kompass an';toast('Kompass aktiv – Blickrichtung wird ins Foto geschrieben (±10°)');}
+function vfClick(e){const mmb=e.target.closest('[data-mm]');if(mmb){vfSetMm(mmb.dataset.mm);return;}
+  const b=e.target.closest('[data-vf]');if(!b)return;const a=b.dataset.vf;
+  if(a==='close')vfClose();else if(a==='shoot')vfShoot().catch(err=>toast('Fehler: '+err.message));
+  else if(a==='set')$('#vfSet').hidden=false;else if(a==='setclose')$('#vfSet').hidden=true;
+  else if(a==='lines'){vf.s.lines=!vf.s.lines;b.textContent='Drittel-Linien: '+(vf.s.lines?'an':'aus');vfSave();}
+  else if(a==='compass')vfCompass(b);}
+function vfChange(e){const t=e.target;
+  if(t.id==='vfSensor')vf.s.sensor=t.value;else if(t.id==='vfSq')vf.s.sq=+t.value;else if(t.id==='vfAr')vf.s.ar=+t.value;
+  else if(t.id==='vfCam'){vf.s.dev=t.value;vfStart();}
+  vfSave();}
+function vfInput(e){const t=e.target;
+  if(t.id==='vfMm'&&+t.value>0){vf.s.mm=+t.value;document.querySelectorAll('.vf-mm').forEach(b=>b.setAttribute('aria-pressed',b.dataset.mm==t.value));vfSave();}
+  if(t.id==='vfHf'&&+t.value>10&&+t.value<170){vf.s.hfov[vf.label||'default']=+t.value;vfSave();}}
+
 /* ---------- Report ---------- */
 function vReport(cur){
-  const it=S.get(cur.id);const p=projectOf(it);const days=it.type==='project'?kids(p.id,'day'):[it];
+  const it=S.get(cur.id);const p=projectOf(it);const days=it.type==='project'?kids(p.id,'day'):it.type==='day'?[it]:[];const locs=it.type==='project'?locsOf(p):it.type==='loc'?[it]:[];
   const meta=[['Prod.-Nr.',p.prodnr],['Kunde',p.client],['Produktion',p.production],['VFX Supervisor',p.sup],['Regie',p.director],['DOP',p.dop],['Projekt-FPS',p.fps]].filter(x=>x[1]);
-  return {title:'Report',sub:it.type==='project'?p.name:`DT ${pad2(it.dt)} · ${p.name}`,html:`
+  return {title:'Report',sub:it.type==='project'?p.name:it.type==='loc'?`${it.name} · ${p.name}`:`DT ${pad2(it.dt)} · ${p.name}`,html:`
   <div class="toolbar noprint"><button class="btn primary block" data-act="print">Drucken / als PDF sichern</button>
   <p class="hint">Im Druckdialog oben auf <b>Teilen</b> tippen → <b>In Dateien sichern</b>, Mail oder AirDrop.</p></div>
   <article class="report">
-    <div class="r-kicker mono">VFX SET REPORT</div><h1>${esc(p.name)}</h1>
+    <div class="r-kicker mono">${it.type==='loc'?'TECH RECCE / LOCATION':'VFX SET REPORT'}</div><h1>${esc(p.name)}</h1>
     <dl class="r-meta">${meta.map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
     ${days.map(d=>{const ss=kids(d.id,'setup');return `<section class="r-day"><div><h2>DT ${esc(pad2(d.dt))} · ${esc(fmtDate(d.date))}</h2><p class="r-sub">${esc([d.location,(d.weather||[]).join(', ')].filter(Boolean).join(' · '))}</p></div>${d.notes?`<p>${nl(d.notes)}</p>`:''}${ss.map(rSetup).join('')||'<p>Keine Setups.</p>'}</section>`;}).join('')}
+    ${locs.length?`<section class="r-day"><h2>Tech Recce &amp; Locations</h2>${locs.map(rLoc).join('')}</section>`:''}
     <p class="r-foot mono">VFX Setlog · erstellt ${fmtDT(Date.now())}</p>
-  </article>`,after:()=>fillReportPhotos(days)};
+  </article>`,after:()=>fillReportPhotos(days,locs)};
 }
 function rSetup(s){const cams=s.cams||[];const t=s.takes||[];const refs=s.refs||{};const memos=(s.memos||[]).filter(m=>m.text.trim()&&!m.done);
   const camNotes=cams.filter(c=>c.note);
@@ -446,22 +696,33 @@ function rSetup(s){const cams=s.cams||[];const t=s.takes||[];const refs=s.refs||
   ${s.notes?`<p><b>Notizen:</b> ${nl(s.notes)}</p>`:''}
   ${memos.map(m=>`<p class="r-memo">Memo ${esc(m.t)}: ${nl(m.text)}</p>`).join('')}
   <div class="r-photos" data-setup="${s.id}"></div></div>`;}
-async function fillReportPhotos(days){for(const d of days)for(const s of kids(d.id,'setup')){if(!s.photoCount)continue;
+function rLoc(l){const g=parseGPS(l.gps);const d=g?sunDay(l.date,g.lat,g.lon):null;const memos=(l.memos||[]).filter(m=>m.text.trim()&&!m.done);
+  const kv=[['Datum',[l.date&&fmtDate(l.date),l.time].filter(Boolean).join(' · ')],['Adresse',l.address],['Kontakt',l.contact],['GPS',l.gps],
+    ['Sonne',d?`Aufgang ${hm(d.ev.rise&&d.ev.rise.t)} (${d.ev.rise?deg(d.ev.rise.az):'–'}) · Höchststand ${hm(d.max.t)} ${Math.round(d.max.el)}° · Untergang ${hm(d.ev.set&&d.ev.set.t)} (${d.ev.set?deg(d.ev.set.az):'–'}) · ${tzLabel()}`:''],
+    ['Zugang',l.access],['Strom',l.power],['Ton',l.sound],['Licht',l.light],['VFX',l.vfx],['Notizen',l.notes]].filter(x=>x[1]);
+  return `<div class="r-setup"><div class="r-sh"><span class="r-id">${esc(l.name)}</span><span>${esc(l.kind||'')}</span></div>
+  ${(l.flags||[]).length?`<p class="r-tags">${esc(l.flags.join(' · '))}</p>`:''}
+  <dl class="r-meta">${kv.map(([k,v])=>`<dt>${k}</dt><dd>${nl(v)}</dd>`).join('')}</dl>
+  ${memos.map(m=>`<p class="r-memo">Memo ${esc(m.t)}: ${nl(m.text)}</p>`).join('')}
+  <div class="r-photos" data-setup="${l.id}"></div></div>`;}
+async function fillReportPhotos(days,locs){for(const s of [...days.flatMap(d=>kids(d.id,'setup')),...(locs||[])]){if(!s.photoCount)continue;
   const box=document.querySelector(`.r-photos[data-setup="${s.id}"]`);if(!box)continue;
   const list=await getPhotos(s.id);box.innerHTML=list.map(ph=>{const u=URL.createObjectURL(new Blob([ph.buf],{type:ph.type}));objURLs.push(u);return `<figure><img src="${u}" alt="${esc(ph.caption||'Set-Foto')}">${ph.caption?`<figcaption>${esc(ph.caption)}</figcaption>`:''}</figure>`;}).join('');}}
 
 /* ---------- Claude round trip ---------- */
 const PATCH_SETUP=/^(scene|slate|time|desc|kinds|refsNote|notes|refs\.[a-z]+|cams\.\d+\.(cam|body|lens|mm|tstop|iso|shutter|fps|filter|kelvin|height|tilt|focus|rig|note)|takes\.\d+\.(n|circled|clip|note))$/;
 const PATCH_DAY=/^(date|dt|location|weather|notes)$/;
+const PATCH_LOC=/^(name|kind|date|time|address|contact|gps|flags|access|power|sound|light|vfx|notes)$/;
 function memoExport(p){
   const out=[];
   out.push('SETLOG-MEMOS v1','','Hallo Claude, das sind meine Set-Memos aus der App „VFX Setlog“.','Bitte arbeite die Infos aus den Memos in die passenden Felder ein und gib mir NUR einen JSON-Codeblock in diesem Format zurück:','',
-  '{"app":"vfx-setlog-update","project":"<PROJEKT-ID>","setups":[{"id":"<SETUP-ID>","set":{"<feld>":"<wert>"},"appendNotes":"<Text>","doneMemos":["<MEMO-ID>"]}],"days":[{"id":"<DAY-ID>","set":{"location":"…"}}]}','',
+  '{"app":"vfx-setlog-update","project":"<PROJEKT-ID>","setups":[{"id":"<SETUP-ID>","set":{"<feld>":"<wert>"},"appendNotes":"<Text>","doneMemos":["<MEMO-ID>"]}],"days":[{"id":"<DAY-ID>","set":{"location":"…"}}],"locations":[{"id":"<LOC-ID>","set":{"<feld>":"<wert>"},"appendNotes":"<Text>","doneMemos":["<MEMO-ID>"]}]}','',
   'Erlaubte Setup-Felder: scene, slate, time (HH:MM), desc, kinds (Array aus: '+KINDS.join(', ')+'), refsNote, notes,',
   '  refs.<key> (true/false; keys: '+REFS.map(r=>r.k+'='+r.l).join(', ')+'),',
   '  cams.<index>.<feld> (felder: cam, body, lens, mm, tstop, iso, shutter, fps, filter, kelvin, height (cm), tilt (°), focus (m), rig, note), neuer Index = neue Kamera,',
   '  takes.<index>.<feld> (n, circled true/false, clip, note), neuer Index = neuer Take.',
   'Erlaubte Drehtag-Felder: date (YYYY-MM-DD), dt, location, weather (Array), notes.',
+  'Erlaubte Location-Felder: name, kind (Tech Recce|Location Scout), date, time, address, contact, gps ("lat, lon"), flags (Array aus: '+LOC_FLAGS.join(', ')+'), access, power, sound, light, vfx, notes.',
   'Alle Werte als String, außer refs/circled (Boolean) und kinds/weather (Array). Überschreibe keine Werte ohne Grund. Was in kein Feld passt, kommt in appendNotes. Markiere verarbeitete Memos in doneMemos.','');
   out.push(`PROJEKT-ID: ${p.id}`,`Projekt: ${p.name}${p.prodnr?' ('+p.prodnr+')':''}`,'');
   let n=0;
@@ -474,6 +735,12 @@ function memoExport(p){
       (s.takes||[]).forEach((t,i)=>out.push(`takes.${i}: n=${t.n}${t.circled?', circled':''}${t.clip?', clip='+t.clip:''}${t.note?', note='+t.note:''}`));
       for(const m of (s.memos||[]).filter(m=>!m.done)){n++;out.push(`MEMO ${m.id} (${m.t}${m.audio?', Audio vorhanden':''}): ${m.text.trim()||'[nur Audio, kein Text]'}`);}
     }out.push('');}
+  const ls=locsOf(p).filter(l=>(l.memos||[]).some(m=>!m.done&&(m.text.trim()||m.audio)));
+  if(ls.length){out.push('=== LOCATIONS / RECCE');
+    for(const l of ls){out.push('',`--- Location ${l.name} · LOC-ID: ${l.id}`,`kind=${l.kind||''}, date=${l.date||''}, gps=${l.gps||''}`,'flags: '+((l.flags||[]).join(', ')||'keine'));
+      ['address','contact','access','power','sound','light','vfx','notes'].forEach(k=>{if(l[k])out.push(`${k}: ${String(l[k]).replace(/\n/g,' / ')}`);});
+      for(const m of l.memos.filter(m=>!m.done)){n++;out.push(`MEMO ${m.id} (${m.t}${m.audio?', Audio vorhanden':''}): ${m.text.trim()||'[nur Audio, kein Text]'}`);}}
+    out.push('');}
   return {text:out.join('\n'),count:n};}
 function vClaude(cur){const p=S.get(cur.id);const ex=memoExport(p);
   return {title:'Memos ↔ Claude',sub:p.name,html:`
@@ -507,6 +774,13 @@ function applyPatch(p,j,dry){const log=[];const touched=new Set();
     const w=dry?clone(d):d;
     for(const [k,v] of Object.entries(u.set||{})){if(!PATCH_DAY.test(k)){log.push(`⚠ DT ${d.dt}: Feld „${k}“ nicht erlaubt`);continue;}const nv=normVal(k,v);w[k]=nv;log.push(`DT ${pad2(d.dt)}: ${k} = ${Array.isArray(nv)?nv.join(', '):nv}`);}
     touched.add(d);}
+  const ownLocs=new Set(locsOf(p).map(l=>l.id));
+  for(const u of j.locations||[]){const l=S.get(u.id);if(!l||!ownLocs.has(u.id)){log.push(`⚠ Location ${u.id} nicht in diesem Projekt – übersprungen`);continue;}
+    const w=dry?clone(l):l;
+    for(const [k,v] of Object.entries(u.set||{})){if(!PATCH_LOC.test(k)){log.push(`⚠ ${l.name}: Feld „${k}“ nicht erlaubt`);continue;}const nv=k==='flags'?(Array.isArray(v)?v.map(String):String(v).split(',').map(x=>x.trim()).filter(Boolean)):String(v??'');w[k]=nv;log.push(`${l.name}: ${k} = ${Array.isArray(nv)?nv.join(', '):nv}`);}
+    if(u.appendNotes&&String(u.appendNotes).trim()){w.notes=(w.notes?w.notes+'\n':'')+String(u.appendNotes).trim();log.push(`${l.name}: Notiz ergänzt`);}
+    for(const mid of u.doneMemos||[]){const mm=(w.memos||[]).find(x=>x.id===mid);if(mm){mm.done=true;log.push(`${l.name}: Memo ${mm.t} als übernommen markiert`);}}
+    touched.add(l);}
   if(!dry)touched.forEach(touch);
   return log;}
 let pendingPatch=null;
@@ -522,9 +796,9 @@ function buildCSV(it){const rows=[CSV_HEAD];
   return '﻿'+rows.map(r=>r.map(csvCell).join(';')).join('\r\n');}
 function bufToB64(buf){const b=new Uint8Array(buf);let s='';for(let i=0;i<b.length;i+=0x8000)s+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000));return btoa(s);}
 function b64ToBuf(b64){const s=atob(b64);const b=new Uint8Array(s.length);for(let i=0;i<s.length;i++)b[i]=s.charCodeAt(i);return b.buffer;}
-async function buildBackup(p){const items=[p];for(const d of kids(p.id,'day')){items.push(d);items.push(...kids(d.id,'setup'));}
+async function buildBackup(p){const items=[p,...locsOf(p)];for(const d of kids(p.id,'day')){items.push(d);items.push(...kids(d.id,'setup'));}
   const photos=[],audio=[];
-  for(const s of items.filter(i=>i.type==='setup')){
+  for(const s of items.filter(i=>i.type==='setup'||i.type==='loc')){
     for(const ph of await getPhotos(s.id))photos.push({id:ph.id,setupId:ph.setupId,caption:ph.caption,created:ph.created,type:ph.type,data:bufToB64(ph.buf)});
     for(const a of await getAudio(s.id))audio.push({id:a.id,setupId:a.setupId,created:a.created,type:a.type,data:bufToB64(a.buf)});}
   return JSON.stringify({app:'vfx-setlog',version:1,exported:new Date().toISOString(),items,photos,audio});}
@@ -563,7 +837,7 @@ function arm(b){if(b.dataset.armed)return true;b.dataset.armed='1';b.dataset.txt
   b.textContent=b.classList.contains('x')?'Löschen?':'Nochmal tippen zum Löschen';
   setTimeout(()=>{if(b.isConnected&&b.dataset.armed){delete b.dataset.armed;b.classList.remove('armed');b.textContent=b.dataset.txt;}},3500);return false;}
 async function deleteItem(id){const ids=[];(function walk(x){ids.push(x);[...S.values()].filter(i=>i.parent===x).forEach(i=>walk(i.id));})(id);
-  const sids=ids.filter(i=>S.get(i)&&S.get(i).type==='setup');const pk=[],ak=[];
+  const sids=ids.filter(i=>S.get(i)&&(S.get(i).type==='setup'||S.get(i).type==='loc'));const pk=[],ak=[];
   for(const sid of sids){pk.push(...await idb('photos','readonly',s=>s.index('setup').getAllKeys(sid)));ak.push(...await idb('audio','readonly',s=>s.index('setup').getAllKeys(sid)));}
   await txn(['items','photos','audio'],'readwrite',t=>{ids.forEach(i=>t.objectStore('items').delete(i));pk.forEach(k=>t.objectStore('photos').delete(k));ak.forEach(k=>t.objectStore('audio').delete(k));});
   ids.forEach(i=>{S.delete(i);pending.delete(i);});}
@@ -579,6 +853,12 @@ app.addEventListener('click',async e=>{
     case 'newProject':{const p={id:uid(),type:'project',parent:null,created:Date.now(),name:'Neues Projekt',prodnr:'',client:'',production:'',sup:'',director:'',dop:'',fps:'25',camPresets:'ARRI ALEXA 35',lensPresets:'',lastBackup:0};await putNow(p);go('project',p.id);setTimeout(()=>{const f=$('#f_name');f&&f.select();},50);break;}
     case 'newDay':{const p=S.get(b.dataset.id);const ds=kids(p.id,'day');const dt=ds.reduce((m,d)=>Math.max(m,+d.dt||0),0)+1;
       const d={id:uid(),type:'day',parent:p.id,created:Date.now(),date:today(),dt:String(dt),location:ds.length?ds[ds.length-1].location||'':'',weather:[],notes:''};await putNow(d);go('day',d.id);break;}
+    case 'newLoc':{const p=S.get(b.dataset.id);const l={id:uid(),type:'loc',parent:p.id,created:Date.now(),kind:'Tech Recce',name:'Neue Location',date:today(),time:nowHM(),address:'',contact:'',gps:'',flags:[],access:'',power:'',sound:'',light:'',vfx:'',notes:'',memos:[],photoCount:0};await putNow(l);go('loc',l.id);setTimeout(()=>{const f=$('#f_name');f&&f.select();},50);break;}
+    case 'setKind':{it.kind=b.dataset.val;touch(it);rerender();break;}
+    case 'finder':{await flush();vfOpen(S.get(b.dataset.id));break;}
+    case 'gps':{if(!navigator.geolocation){toast('Standort nicht verfügbar');break;}b.textContent='◎ Suche Position…';
+      navigator.geolocation.getCurrentPosition(pos=>{it.gps=pos.coords.latitude.toFixed(6)+', '+pos.coords.longitude.toFixed(6);touch(it);rerender();toast(`Position übernommen (±${Math.round(pos.coords.accuracy)} m)`);},
+        err=>{b.textContent='◎ Position übernehmen';toast('Standort: '+(err.code===1?'nicht erlaubt – Einstellungen → Datenschutz → Ortungsdienste → Safari-Websites':err.message));},{enableHighAccuracy:true,timeout:15000,maximumAge:30000});break;}
     case 'newSetup':{const s=await createSetup(S.get(b.dataset.id));go('setup',s.id);break;}
     case 'dupSetup':{const src=S.get(b.dataset.id);const s=await createSetup(S.get(src.parent),src);nav.pop();go('setup',s.id);toast('Setup dupliziert');break;}
     case 'toggle':{const k=b.dataset.k,v=b.dataset.val;const arr=(getPath(it,k)||[]).slice();const i=arr.indexOf(v);i<0?arr.push(v):arr.splice(i,1);setPath(it,k,arr);touch(it);b.setAttribute('aria-pressed',i<0);break;}
@@ -613,7 +893,8 @@ app.addEventListener('input',e=>{const el=e.target;
   if(el.id==='patchIn'){pendingPatch=null;const b=document.querySelector('[data-act="applyPatch"]');if(b){delete b.dataset.ready;b.textContent='Prüfen & übernehmen';}$('#patchOut').innerHTML='';return;}
   if(!el.dataset.k)return;const host=el.closest('[data-item]');if(!host)return;const it=S.get(host.dataset.item);if(!it)return;
   setPath(it,el.dataset.k,el.value);touch(it);
-  if((it.type==='setup'&&el.dataset.k==='vfxid')||(it.type==='project'&&el.dataset.k==='name'))$('#ttl').textContent=el.value||'—';});
+  if(it.type==='loc'&&/^(gps|date|time)$/.test(el.dataset.k)){const sb=$('#sunBox');if(sb)sb.innerHTML=sunHTML(it);}
+  if((it.type==='setup'&&el.dataset.k==='vfxid')||((it.type==='project'||it.type==='loc')&&el.dataset.k==='name'))$('#ttl').textContent=el.value||'—';});
 app.addEventListener('change',e=>{const el=e.target;
   if(el.dataset.file==='photo'){const host=el.closest('[data-item]');addPhotos(S.get(host.dataset.item),[...el.files]).catch(err=>toast('Foto-Fehler: '+err.message)).finally(()=>el.value='');}
   if(el.dataset.file==='import'){importBackup(el.files[0]).finally(()=>el.value='');}});
