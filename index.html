@@ -69,9 +69,12 @@ textarea{resize:vertical}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{font:inherit;font-size:14px;min-height:38px;padding:0 12px;border-radius:19px;border:1px solid var(--line);background:var(--surface2);color:var(--fg);cursor:pointer;-webkit-tap-highlight-color:transparent}
 .chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:600}
-.take{display:grid;grid-template-columns:52px 1fr 40px;gap:6px 8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.take{display:grid;grid-template-columns:52px 1fr 40px 40px;gap:6px 8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
 .take:last-of-type{border-bottom:none}
-.take .note{grid-column:2/4}
+.take .note{grid-column:2/5}
+.x.mic{font-size:18px}
+.x.mic.rec{width:auto;padding:0 8px;font-size:13px;border-radius:8px}
+.memo .tk{color:var(--accent);font-weight:600}
 .tnum{width:52px;height:44px;border-radius:22px;border:2px solid var(--line);background:transparent;color:var(--fg);font-size:17px;font-weight:700;cursor:pointer}
 .take.circ .tnum{border-color:var(--ok);color:var(--ok);box-shadow:inset 0 0 0 2px var(--ok)}
 .x{width:40px;height:40px;border-radius:20px;border:none;background:transparent;color:var(--muted);font-size:22px;cursor:pointer;flex:none}
@@ -94,6 +97,9 @@ textarea{resize:vertical}
 .empty{border:1px dashed var(--line);border-radius:12px;padding:16px;color:var(--muted);text-align:center;font-size:14px}
 .hint{font-size:13px;color:var(--muted);margin:0}
 .hint.warn{color:var(--warn)}
+.chk{display:flex;gap:10px;align-items:center;font-size:14px;min-height:40px}
+.chk input{width:22px;height:22px;accent-color:var(--accent)}
+details summary{cursor:pointer;padding:6px 0}
 .danger{display:flex;justify-content:center}
 .install{border-color:var(--accent)}
 pre.box{margin:0;max-height:220px;overflow:auto;background:var(--surface2);border-radius:8px;padding:10px;font:12px/1.4 var(--mono);white-space:pre-wrap;word-break:break-word}
@@ -202,7 +208,7 @@ window.addEventListener('unhandledrejection',function(e){var r=e.reason;window._
 </script>
 <script>
 'use strict';
-const APP_VERSION='1.1.1';
+const APP_VERSION='1.2.0';
 const $=s=>document.querySelector(s);
 const app=$('#app');
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -403,12 +409,13 @@ function vSetup(cur){
 function takeRow(tk,i){return `<div class="take ${tk.circled?'circ':''}">
   <button type="button" class="tnum mono" data-act="circle" data-i="${i}" aria-pressed="${!!tk.circled}" aria-label="Take ${esc(tk.n)} circlen">${esc(tk.n)}</button>
   <input data-k="takes.${i}.clip" value="${esc(tk.clip)}" placeholder="Clip / TC" class="mono" autocapitalize="characters" autocomplete="off">
+  <button type="button" class="x mic" data-act="recTake" data-i="${i}" aria-label="Sprachmemo zu Take ${esc(tk.n)}">🎙</button>
   <button type="button" class="x" data-act="delTake" data-i="${i}" data-confirm aria-label="Take löschen">×</button>
   <input class="note" data-k="takes.${i}.note" value="${esc(tk.note)}" placeholder="Notiz zum Take" autocomplete="off"></div>`;}
 function memoRow(m,i){return `<div class="memo ${m.done?'done':''}" data-memo="${m.id}">
-  <div class="memo-h"><span class="t mono">${esc(m.t||'')}${m.audio?' · Audio':''}</span><button type="button" class="x" data-act="delMemo" data-i="${i}" data-confirm aria-label="Memo löschen">×</button></div>
+  <div class="memo-h"><span class="t mono">${esc(m.t||'')}${m.take?` · <span class="tk">Take ${esc(m.take)}</span>`:''}${m.audio?' · Audio':''}${m.audio&&!m.text.trim()&&!m.done?' · wartet auf Claude':''}</span><button type="button" class="x" data-act="delMemo" data-i="${i}" data-confirm aria-label="Memo löschen">×</button></div>
   <div class="memo-audio"></div>
-  ${F('',`memos.${i}.text`,m.text,{type:'textarea',rows:2,ph:'Diktieren oder tippen, was ins Setup gehört'})}</div>`;}
+  ${F('',`memos.${i}.text`,m.text,{type:'textarea',rows:2,ph:m.audio?'Optional – Claude transkribiert das Audio':'Diktieren oder tippen, was ins Setup gehört'})}</div>`;}
 function camCard(s,c,i){const k=f=>`cams.${i}.${f}`;
   return `<div class="card" data-item="${s.id}"><div class="sec-row"><h3 class="cam-h"><span class="badge mono">${esc(c.cam)}</span> Kamera ${esc(c.cam)}</h3>${s.cams.length>1?`<button type="button" class="x" data-act="delCam" data-i="${i}" data-confirm aria-label="Kamera entfernen">×</button>`:''}</div>
   <div class="grid">
@@ -451,21 +458,22 @@ async function fillAudio(s){const list=await getAudio(s.id);const map=new Map(li
   document.querySelectorAll('[data-memo]').forEach(el=>{const a=map.get(el.dataset.memo);const box=el.querySelector('.memo-audio');if(!a||!box)return;
     const u=URL.createObjectURL(new Blob([a.buf],{type:a.type}));objURLs.push(u);box.innerHTML=`<audio controls preload="metadata" src="${u}"></audio>`;});}
 let rec=null;
-async function toggleRec(s,btn){
+async function toggleRec(s,btn,take){
   if(rec){rec.mr.stop();return;}
+  await flush();
   if(!navigator.mediaDevices||!window.MediaRecorder){toast('Audioaufnahme wird hier nicht unterstützt. Nutze die Diktiertaste.');return;}
   let stream;try{stream=await navigator.mediaDevices.getUserMedia({audio:true});}catch(e){toast('Kein Mikrofonzugriff: '+e.message);return;}
   const type=['audio/mp4','audio/aac','audio/webm'].find(t=>MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(t));
   const mr=new MediaRecorder(stream,type?{mimeType:type}:undefined);const chunks=[];const t0=Date.now();
-  rec={mr,stream,timer:setInterval(()=>{const b=$('#recBtn');if(b){const sec=Math.round((Date.now()-t0)/1000);b.textContent=`■ Stopp ${Math.floor(sec/60)}:${pad2(sec%60)}`;}},500)};
+  rec={mr,stream,btn,timer:setInterval(()=>{const b=rec&&rec.btn&&rec.btn.isConnected?rec.btn:$('#recBtn');if(b){const sec=Math.round((Date.now()-t0)/1000);b.textContent=`■ Stopp ${Math.floor(sec/60)}:${pad2(sec%60)}`;}},500)};
   btn.classList.add('rec');btn.textContent='■ Stopp 0:00';
   mr.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data);};
   mr.onstop=async()=>{clearInterval(rec.timer);stream.getTracks().forEach(t=>t.stop());rec=null;
     const blob=new Blob(chunks,{type:mr.mimeType||type||'audio/mp4'});if(!blob.size){toast('Aufnahme leer');rerender();return;}
-    const m={id:uid(),t:nowHM(),text:'',audio:true,done:false,created:Date.now()};
+    const m={id:uid(),t:nowHM(),text:'',audio:true,done:false,created:Date.now()};if(take)m.take=String(take);
     const abuf=await blob.arrayBuffer();
     await idb('audio','readwrite',st=>st.put({id:m.id,setupId:s.id,buf:abuf,type:blob.type,created:m.created}));
-    (s.memos=s.memos||[]).push(m);touch(s);await flush();rerender();toast('Audio-Memo gespeichert – Stichworte per Diktat ergänzen');};
+    (s.memos=s.memos||[]).push(m);touch(s);await flush();rerender();toast(take?`Memo zu Take ${take} gespeichert`:'Audio-Memo gespeichert');};
   mr.start(1000);}
 function stopRec(){if(rec){try{rec.mr.stop()}catch{}}}
 
@@ -723,40 +731,49 @@ const PATCH_LOC=/^(name|kind|date|time|address|contact|gps|flags|access|power|so
 function memoExport(p){
   const out=[];
   out.push('SETLOG-MEMOS v1','','Hallo Claude, das sind meine Set-Memos aus der App „VFX Setlog“.','Bitte arbeite die Infos aus den Memos in die passenden Felder ein und gib mir NUR einen JSON-Codeblock in diesem Format zurück:','',
-  '{"app":"vfx-setlog-update","project":"<PROJEKT-ID>","setups":[{"id":"<SETUP-ID>","set":{"<feld>":"<wert>"},"appendNotes":"<Text>","doneMemos":["<MEMO-ID>"]}],"days":[{"id":"<DAY-ID>","set":{"location":"…"}}],"locations":[{"id":"<LOC-ID>","set":{"<feld>":"<wert>"},"appendNotes":"<Text>","doneMemos":["<MEMO-ID>"]}]}','',
+  '{"app":"vfx-setlog-update","project":"<PROJEKT-ID>","setups":[{"id":"<SETUP-ID>","set":{"<feld>":"<wert>"},"appendNotes":"<Text>","memoText":{"<MEMO-ID>":"<Transkript>"},"doneMemos":["<MEMO-ID>"]}],"days":[{"id":"<DAY-ID>","set":{"location":"…"}}],"locations":[{"id":"<LOC-ID>","set":{"<feld>":"<wert>"},"appendNotes":"<Text>","memoText":{"<MEMO-ID>":"<Transkript>"},"doneMemos":["<MEMO-ID>"]}]}','',
   'Erlaubte Setup-Felder: scene, slate, time (HH:MM), desc, kinds (Array aus: '+KINDS.join(', ')+'), refsNote, notes,',
   '  refs.<key> (true/false; keys: '+REFS.map(r=>r.k+'='+r.l).join(', ')+'),',
   '  cams.<index>.<feld> (felder: cam, body, lens, mm, tstop, iso, shutter, fps, filter, kelvin, height (cm), tilt (°), focus (m), rig, note), neuer Index = neue Kamera,',
   '  takes.<index>.<feld> (n, circled true/false, clip, note), neuer Index = neuer Take.',
   'Erlaubte Drehtag-Felder: date (YYYY-MM-DD), dt, location, weather (Array), notes.',
   'Erlaubte Location-Felder: name, kind (Tech Recce|Location Scout), date, time, address, contact, gps ("lat, lon"), flags (Array aus: '+LOC_FLAGS.join(', ')+'), access, power, sound, light, vfx, notes.',
-  'Alle Werte als String, außer refs/circled (Boolean) und kinds/weather (Array). Überschreibe keine Werte ohne Grund. Was in kein Feld passt, kommt in appendNotes. Markiere verarbeitete Memos in doneMemos.','');
+  'Alle Werte als String, außer refs/circled (Boolean) und kinds/weather (Array). Überschreibe keine Werte ohne Grund. Was in kein Feld passt, kommt in appendNotes. Markiere verarbeitete Memos in doneMemos.',
+  'Audio-Memos: Transkribiere das Audio (Feld audio, Base64), schreibe das bereinigte Transkript in memoText des Setups/der Location, zu dem das Memo gehört.',
+  'Ordne Inhalte dem richtigen Ziel zu: Ein Memo mit „zu Take N“ betrifft diesen Take; nennt das Memo andere Takes, Setups oder Szenen, trage die Infos dort ein (takes.<index>.note, circled, Kamerafelder, refs usw.). Take-Index = Position in der takes-Liste (takes.0 = erster Take).','');
   out.push(`PROJEKT-ID: ${p.id}`,`Projekt: ${p.name}${p.prodnr?' ('+p.prodnr+')':''}`,'');
   let n=0;
-  for(const d of kids(p.id,'day')){const ss=kids(d.id,'setup').filter(s=>(s.memos||[]).some(m=>!m.done&&m.text.trim())||(s.memos||[]).some(m=>!m.done&&m.audio));
+  for(const d of kids(p.id,'day')){const ss=kids(d.id,'setup').filter(s=>(s.memos||[]).some(m=>!m.done&&(m.text.trim()||m.audio)));
     if(!ss.length)continue;
     out.push(`=== DT ${pad2(d.dt)} · ${d.date} · DAY-ID: ${d.id}`,`Location: ${d.location||'–'}`);
     for(const s of ss){out.push('',`--- Setup ${s.vfxid} · SETUP-ID: ${s.id}`,`Szene: ${s.scene||'–'} | Slate: ${s.slate||'–'} | Zeit: ${s.time||'–'}`,`Beschreibung: ${s.desc||'–'}`);
       (s.cams||[]).forEach((c,i)=>out.push(`cams.${i}: `+CAM_FIELDS.filter(f=>c[f]).map(f=>`${f}=${c[f]}`).join(', ')));
       out.push('refs: '+(REFS.filter(r=>(s.refs||{})[r.k]).map(r=>r.k).join(', ')||'keine'));
       (s.takes||[]).forEach((t,i)=>out.push(`takes.${i}: n=${t.n}${t.circled?', circled':''}${t.clip?', clip='+t.clip:''}${t.note?', note='+t.note:''}`));
-      for(const m of (s.memos||[]).filter(m=>!m.done)){n++;out.push(`MEMO ${m.id} (${m.t}${m.audio?', Audio vorhanden':''}): ${m.text.trim()||'[nur Audio, kein Text]'}`);}
+      for(const m of (s.memos||[]).filter(m=>!m.done&&(m.text.trim()||m.audio))){n++;out.push(`MEMO ${m.id} (${m.t}${m.take?', zu Take '+m.take:''}${m.audio?', Audio im Paket':''}): ${m.text.trim()||'[Audio – bitte transkribieren]'}`);}
     }out.push('');}
   const ls=locsOf(p).filter(l=>(l.memos||[]).some(m=>!m.done&&(m.text.trim()||m.audio)));
   if(ls.length){out.push('=== LOCATIONS / RECCE');
     for(const l of ls){out.push('',`--- Location ${l.name} · LOC-ID: ${l.id}`,`kind=${l.kind||''}, date=${l.date||''}, gps=${l.gps||''}`,'flags: '+((l.flags||[]).join(', ')||'keine'));
       ['address','contact','access','power','sound','light','vfx','notes'].forEach(k=>{if(l[k])out.push(`${k}: ${String(l[k]).replace(/\n/g,' / ')}`);});
-      for(const m of l.memos.filter(m=>!m.done)){n++;out.push(`MEMO ${m.id} (${m.t}${m.audio?', Audio vorhanden':''}): ${m.text.trim()||'[nur Audio, kein Text]'}`);}}
+      for(const m of l.memos.filter(m=>!m.done&&(m.text.trim()||m.audio))){n++;out.push(`MEMO ${m.id} (${m.t}${m.audio?', Audio im Paket':''}): ${m.text.trim()||'[Audio – bitte transkribieren]'}`);}}
     out.push('');}
   return {text:out.join('\n'),count:n};}
-function vClaude(cur){const p=S.get(cur.id);const ex=memoExport(p);
+async function memoPackage(p){const ex=memoExport(p);const audio=[];
+  for(const it of [...setupsOf(p),...locsOf(p)]){const open=new Map((it.memos||[]).filter(m=>!m.done&&m.audio).map(m=>[m.id,m]));if(!open.size)continue;
+    for(const a of await getAudio(it.id)){const m=open.get(a.id);if(!m)continue;
+      audio.push({memo:a.id,target:it.type==='loc'?'location':'setup',targetId:it.id,label:it.type==='loc'?it.name:it.vfxid,take:m.take||null,time:m.t,type:a.type,data:bufToB64(a.buf)});}}
+  return {json:JSON.stringify({app:'vfx-setlog-memos',version:2,created:new Date().toISOString(),project:{id:p.id,name:p.name},prompt:ex.text,audio}),count:ex.count,audio:audio.length};}
+function vClaude(cur){const p=S.get(cur.id);const ex=memoExport(p);const nAud=[...setupsOf(p),...locsOf(p)].reduce((n,x)=>n+(x.memos||[]).filter(m=>!m.done&&m.audio).length,0);
   return {title:'Memos ↔ Claude',sub:p.name,html:`
   <section class="card"><h2 class="sec">1 · Memos an Claude</h2>
-    <p class="hint">${ex.count?`${ex.count} offene Memo${ex.count>1?'s':''}. Kopieren und in einen Claude-Chat einfügen (braucht Internet).`:'Keine offenen Memos. Memos legst du im jeweiligen Setup an.'}</p>
-    ${ex.count?`<pre class="box" id="memoText">${esc(ex.text)}</pre><div class="btns"><button class="btn primary" data-act="copyMemos" data-id="${p.id}">Kopieren</button><button class="btn" data-act="shareMemos" data-id="${p.id}">Als Datei teilen</button></div>`:''}</section>
+    <p class="hint">${ex.count?`${ex.count} offene Memo${ex.count>1?'s':''}${nAud?`, davon ${nAud} mit Audio`:''}. Paket teilen → in Dateien sichern → im Claude-Chat anhängen (braucht Internet).`:'Keine offenen Memos. Memos sprichst du im Setup, am Take (🎙) oder in einer Location ein.'}</p>
+    ${ex.count?`<button class="btn primary block" data-act="shareMemoPkg" data-id="${p.id}">Memo-Paket teilen (mit Audio)</button>
+    <details><summary class="hint">Nur Text kopieren (ohne Audio)</summary><pre class="box" id="memoText">${esc(ex.text)}</pre><div class="btns"><button class="btn" data-act="copyMemos" data-id="${p.id}">Text kopieren</button></div></details>`:''}</section>
   <section class="card"><h2 class="sec">2 · Antwort von Claude einspielen</h2>
     <p class="hint">Claudes Antwort (den JSON-Block) hier einfügen. Text drumherum ist egal.</p>
     <label class="fld"><span>Update</span><textarea id="patchIn" rows="7" placeholder='{"app":"vfx-setlog-update", …}' autocapitalize="off" spellcheck="false"></textarea></label>
+    <label class="chk"><input type="checkbox" id="delAudio"> Audio übernommener Memos danach löschen (spart Speicher)</label>
     <button class="btn primary block" data-act="applyPatch" data-id="${p.id}">Prüfen &amp; übernehmen</button>
     <div id="patchOut"></div></section>`};}
 function parsePatch(raw){const a=raw.indexOf('{'),b=raw.lastIndexOf('}');if(a<0||b<a)throw new Error('Kein JSON gefunden.');
@@ -775,6 +792,7 @@ function applyPatch(p,j,dry){const log=[];const touched=new Set();
         if(i===arr.length){fresh=true;arr.push(m[1]==='cams'?Object.assign(Object.fromEntries(CAM_FIELDS.map(f=>[f,''])),clone(arr[i-1]||{}),{cam:String.fromCharCode(65+i),note:''}):{n:String(i+1),circled:false,clip:'',note:''});}}
       const old=getPath(w,k);const nv=normVal(k,v);setPath(w,k,nv);log.push(`${s.vfxid}: ${k} = ${Array.isArray(nv)?nv.join(', '):nv}${!fresh&&old!=null&&String(old)!==''&&String(old)!==String(nv)?`  (vorher: ${old})`:''}`);}
     if(u.appendNotes&&String(u.appendNotes).trim()){w.notes=(w.notes?w.notes+'\n':'')+String(u.appendNotes).trim();log.push(`${s.vfxid}: Notiz ergänzt`);}
+    for(const [mid,txt] of Object.entries(u.memoText||{})){const mm=(w.memos||[]).find(x=>x.id===mid);if(mm&&String(txt).trim()){mm.text=String(txt).trim();log.push(`${s.vfxid}: Memo ${mm.t} transkribiert`);}}
     for(const mid of u.doneMemos||[]){const mm=(w.memos||[]).find(x=>x.id===mid);if(mm){mm.done=true;log.push(`${s.vfxid}: Memo ${mm.t} als übernommen markiert`);}}
     touched.add(s);}
   for(const u of j.days||[]){const d=S.get(u.id);if(!d||!ownDays.has(u.id)){log.push(`⚠ Drehtag ${u.id} nicht in diesem Projekt – übersprungen`);continue;}
@@ -786,6 +804,7 @@ function applyPatch(p,j,dry){const log=[];const touched=new Set();
     const w=dry?clone(l):l;
     for(const [k,v] of Object.entries(u.set||{})){if(!PATCH_LOC.test(k)){log.push(`⚠ ${l.name}: Feld „${k}“ nicht erlaubt`);continue;}const nv=k==='flags'?(Array.isArray(v)?v.map(String):String(v).split(',').map(x=>x.trim()).filter(Boolean)):String(v??'');w[k]=nv;log.push(`${l.name}: ${k} = ${Array.isArray(nv)?nv.join(', '):nv}`);}
     if(u.appendNotes&&String(u.appendNotes).trim()){w.notes=(w.notes?w.notes+'\n':'')+String(u.appendNotes).trim();log.push(`${l.name}: Notiz ergänzt`);}
+    for(const [mid,txt] of Object.entries(u.memoText||{})){const mm=(w.memos||[]).find(x=>x.id===mid);if(mm&&String(txt).trim()){mm.text=String(txt).trim();log.push(`${l.name}: Memo ${mm.t} transkribiert`);}}
     for(const mid of u.doneMemos||[]){const mm=(w.memos||[]).find(x=>x.id===mid);if(mm){mm.done=true;log.push(`${l.name}: Memo ${mm.t} als übernommen markiert`);}}
     touched.add(l);}
   if(!dry)touched.forEach(touch);
@@ -890,6 +909,7 @@ app.addEventListener('click',async e=>{
     case 'addMemo':{(it.memos=it.memos||[]).push({id:uid(),t:nowHM(),text:'',audio:false,done:false,created:Date.now()});touch(it);rerender();const ta=document.querySelectorAll('#memos textarea');const last=ta[ta.length-1];if(last){last.focus();}break;}
     case 'delMemo':{const m=it.memos.splice(+b.dataset.i,1)[0];if(m&&m.audio)await idb('audio','readwrite',s=>s.delete(m.id));touch(it);rerender();break;}
     case 'rec':await toggleRec(it,b);break;
+    case 'recTake':{const tk=it.takes[+b.dataset.i];await toggleRec(it,b,tk&&tk.n);break;}
     case 'delPhoto':{await idb('photos','readwrite',s=>s.delete(b.dataset.pid));await fillPhotos(it);break;}
     case 'del':{const x=S.get(b.dataset.id);await deleteItem(x.id);nav.pop();toast('Gelöscht');render();window.scrollTo(0,0);break;}
     case 'report':go('report',b.dataset.id);break;
@@ -898,9 +918,14 @@ app.addEventListener('click',async e=>{
     case 'backup':{const p=S.get(b.dataset.id);await flush();toast('Backup wird erstellt…');const json=await buildBackup(p);
       deliver(`${slug(p.name)}_setlog_backup_${today()}.json`,json,'application/json',()=>{p.lastBackup=Date.now();touch(p);rerender();});break;}
     case 'copyMemos':{const txt=memoExport(S.get(b.dataset.id)).text;try{await navigator.clipboard.writeText(txt);toast('Kopiert – jetzt in Claude einfügen');}catch{const r=document.createRange();r.selectNodeContents($('#memoText'));const sel=getSelection();sel.removeAllRanges();sel.addRange(r);toast('Text markiert – „Kopieren“ wählen');}break;}
+    case 'shareMemoPkg':{const p=S.get(b.dataset.id);await flush();toast('Paket wird erstellt…');const pk=await memoPackage(p);
+      deliver(`${slug(p.name)}_memos_${today()}.setlog.json`,pk.json,'application/json',()=>toast(`Paket mit ${pk.count} Memos (${pk.audio} Audio) bereit – im Claude-Chat anhängen`));break;}
     case 'shareMemos':{const p=S.get(b.dataset.id);deliver(`${slug(p.name)}_memos_${today()}.txt`,memoExport(p).text,'text/plain');break;}
     case 'applyPatch':{const p=S.get(b.dataset.id);const out=$('#patchOut');
-      if(b.dataset.ready&&pendingPatch){applyPatch(p,pendingPatch,false);await flush();pendingPatch=null;toast('Update übernommen');nav.pop();render();window.scrollTo(0,0);break;}
+      if(b.dataset.ready&&pendingPatch){applyPatch(p,pendingPatch,false);
+        if($('#delAudio')&&$('#delAudio').checked){const ids=[];[...(pendingPatch.setups||[]),...(pendingPatch.locations||[])].forEach(u=>{const it=S.get(u.id);if(!it)return;(u.doneMemos||[]).forEach(mid=>{const m=(it.memos||[]).find(x=>x.id===mid);if(m&&m.audio&&m.text.trim()){m.audio=false;ids.push(mid);touch(it);}});});
+          if(ids.length)await idb('audio','readwrite',st=>{ids.forEach(i=>st.delete(i));});}
+        await flush();pendingPatch=null;toast('Update übernommen');nav.pop();render();window.scrollTo(0,0);break;}
       try{const j=parsePatch($('#patchIn').value);if(j.project&&j.project!==p.id)throw new Error('Update gehört zu einem anderen Projekt.');
         const log=applyPatch(p,j,true);pendingPatch=j;
         out.innerHTML=`<pre class="box">${esc(log.join('\n')||'Keine Änderungen.')}</pre>`;b.textContent=`${log.filter(l=>!l.startsWith('⚠')).length} Änderungen übernehmen`;b.dataset.ready='1';}
