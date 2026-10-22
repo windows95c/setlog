@@ -210,7 +210,9 @@ body.vf-open{overflow:hidden}
 .vf-mm[aria-pressed="true"]{background:#f0b23a;color:#111;border-color:#f0b23a}
 .vf-row{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 16px}
 .vf-thumb{cursor:pointer;width:48px;height:48px;border-radius:8px;background:#1d2024 center/cover no-repeat;border:1px solid #333}
-.vf-count{justify-self:end;font-size:12px;color:#aaa}
+.vf-count{font-size:12px;color:#aaa}
+.vf-side{justify-self:end;display:flex;flex-direction:column;align-items:center;gap:4px}
+.vf-hq{display:flex;align-items:center;justify-content:center;width:52px;height:40px;border-radius:10px;border:1px solid #f0b23a;color:#f0b23a;font-weight:700;font-size:14px;cursor:pointer}
 .vf-shutter{width:68px;height:68px;border-radius:50%;border:4px solid #fff;background:#f0b23a;cursor:pointer}
 .vf-shutter:active{transform:scale(.94)}
 .vf-set{position:absolute;left:0;right:0;bottom:0;background:#16191c;color:#eee;border-radius:16px 16px 0 0;padding:16px max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:10px;max-height:80%;overflow:auto;z-index:2}
@@ -224,7 +226,7 @@ body.vf-open{overflow:hidden}
   .vf-bot{grid-row:2;grid-column:2;flex-direction:row;padding:0 6px 6px 0;gap:6px;min-height:0}
   .vf-focals{flex-direction:column;overflow-y:auto;overflow-x:hidden;padding:0;width:56px}
   .vf-row{display:flex;flex-direction:column;justify-content:center;gap:12px;padding:0;flex:1}
-  .vf-count{justify-self:auto}
+  .vf-count{justify-self:auto}.vf-side{justify-self:auto}
 }
 @media print{
   @page{margin:12mm}
@@ -254,7 +256,7 @@ window.addEventListener('unhandledrejection',function(e){var r=e.reason;window._
 </script>
 <script>
 'use strict';
-const APP_VERSION='1.4.2';
+const APP_VERSION='1.5.0';
 /* Kamera/Mikro offen halten: iOS fragt bei jedem neuen Zugriff erneut – Streams werden daher wiederverwendet und erst nach Leerlauf freigegeben */
 const KEEP_MS=3*60000;const media={cam:null,camKey:'',camT:0,mic:null,micT:0};
 const liveStream=s=>!!(s&&s.getTracks().some(t=>t.readyState==='live'));
@@ -522,10 +524,10 @@ async function setPhotoScene(ids,scene){const list=ids.map(id=>photoCache.get(id
   await idb('photos','readwrite',st=>{list.forEach(ph=>st.put(ph));});return list.length;}
 async function shrink(file){const url=URL.createObjectURL(file);
   try{const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error('Bild nicht lesbar'));i.src=url;});
-    const max=1800;const k=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
+    const max=3200;const k=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
     const w=Math.round(img.naturalWidth*k),h=Math.round(img.naturalHeight*k);
     const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);
-    const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.82));if(!blob)throw new Error('Konvertierung fehlgeschlagen');
+    const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.9));if(!blob)throw new Error('Konvertierung fehlgeschlagen');
     return {buf:await blob.arrayBuffer(),type:'image/jpeg'};}
   catch(e){return {buf:await file.arrayBuffer(),type:file.type||'image/jpeg'};}
   finally{URL.revokeObjectURL(url);}}
@@ -666,8 +668,8 @@ function defHfov(label){label=String(label||'');if(/ultra|weitwinkel/i.test(labe
 const curHfov=()=>{const k=vf.label||'default';return +vf.s.hfov[k]||defHfov(vf.label);};
 const sensorObj=()=>SENSORS.find(x=>x.id===vf.s.sensor)||SENSORS[0];
 function projectFocals(p){const set=new Set();lines(p&&p.lensPresets).forEach(x=>{const m=x.match(/(\d+(?:[.,]\d+)?)\s*mm/i);if(m)set.add(+m[1].replace(',','.'));});return [...set].sort((a,b)=>a-b);}
-function vfGeom(W,H){const sen=sensorObj(),sq=+vf.s.sq||1,mm=Math.max(1,+vf.s.mm||35);
-  const fpx=(Math.max(W,H)/2)/Math.tan(curHfov()*RAD/2);
+function vfGeom(W,H,hfo){const sen=sensorObj(),sq=+vf.s.sq||1,mm=Math.max(1,+vf.s.mm||35);
+  const fpx=(Math.max(W,H)/2)/Math.tan((hfo||curHfov())*RAD/2);
   const cw=fpx*sen.w*sq/mm,ch=fpx*sen.h/mm;
   return {cw,ch,cx:(W-cw)/2,cy:(H-ch)/2,cover:cw<=W*1.005&&ch<=H*1.005,hf:2*Math.atan(sen.w*sq/2/mm)/RAD,vfv:2*Math.atan(sen.h/2/mm)/RAD,res:Math.round(Math.min(cw,W))};}
 function fitRect(aw,ah,bw,bh){const k=Math.min(bw/aw,bh/ah);const w=aw*k,h=ah*k;return {x:(bw-w)/2,y:(bh-h)/2,w,h};}
@@ -696,14 +698,14 @@ function finderHTML(p){const pf=projectFocals(p);const all=[...new Set([...pf,..
   <div class="vf-stage"><video id="vfVideo" playsinline muted autoplay></video><canvas id="vfCanvas"></canvas><div id="vfInfo" class="vf-info mono"></div><div id="vfWarn" class="vf-warn" hidden></div><div id="vfFlash" class="vf-flash" hidden></div></div>
   <div class="vf-bot">
     <div class="vf-focals" id="vfFocals">${all.map(m=>`<button class="vf-mm${pf.includes(m)?' own':''}" data-mm="${m}" aria-pressed="${m==vf.s.mm}">${m}</button>`).join('')}</div>
-    <div class="vf-row"><div class="vf-thumb" id="vfThumb"></div><button class="vf-shutter" data-vf="shoot" aria-label="Foto aufnehmen"></button><div class="vf-count mono" id="vfCount"></div></div>
+    <div class="vf-row"><div class="vf-thumb" id="vfThumb"></div><button class="vf-shutter" data-vf="shoot" aria-label="Foto aufnehmen"></button><div class="vf-side"><label class="vf-hq" data-vf="hq">HQ<input class="vh" type="file" accept="image/*" capture="environment" id="vfHQ"></label><div class="vf-count mono" id="vfCount"></div></div></div>
   </div>
   <div class="vf-set" id="vfSet" hidden>
     <label class="fld"><span>Eigene Brennweite (mm)</span><input id="vfMm" type="number" inputmode="decimal" value="${esc(vf.s.mm)}"></label>
     <label class="fld" id="vfCamWrap" hidden><span>iPhone-Kamera</span><select id="vfCam"></select></label>
     <label class="fld"><span>Kalibrierung: horizontaler Bildwinkel dieser iPhone-Kamera (°)</span><input id="vfHf" type="number" inputmode="decimal" step="0.1" value="${curHfov()}"></label>
     <p class="hint">iPhone 12 Hauptkamera ≈ 67°, Ultra-Weitwinkel ≈ 106°. Prüfen: Objekt mit Breite B aus Abstand D bildfüllend → 2·atan(B/2D).</p>
-    <div class="btns"><button class="btn" data-vf="lines">Drittel-Linien: ${vf.s.lines?'an':'aus'}</button><button class="btn" data-vf="hires">4K-Kamerastream: ${vf.s.hires?'an':'aus'}</button><button class="btn" data-vf="compass">${vf.heading!=null?'Kompass an':'Kompass aktivieren'}</button></div>
+    <div class="btns"><button class="btn" data-vf="lines">Drittel-Linien: ${vf.s.lines?'an':'aus'}</button><p class="hint">Live-Sucher nutzt das Videobild (Full HD). 4K = schärfer, aber mehr Speicher/Wärme. Beste Qualität: <b>HQ</b> neben dem Auslöser (echtes iPhone-Foto, gleicher Ausschnitt).</p><button class="btn" data-vf="hires">4K-Kamerastream: ${vf.s.hires?'an':'aus'}</button><button class="btn" data-vf="compass">${vf.heading!=null?'Kompass an':'Kompass aktivieren'}</button></div>
     <button class="btn primary block" data-vf="setclose">Fertig</button></div>
   </div>`;}
 async function vfOpen(item){if(vf.on)return;stopRec();const pb=$('#photos');if(pb){pb.innerHTML='';objURLs.forEach(u=>URL.revokeObjectURL(u));objURLs=[];}const p=projectOf(item);const fl=photoUI.filter[item.id];vf={on:true,item,s:vfLoad(),heading:vf.heading??null,shots:0,sceneId:fl&&fl!=='all'&&fl!=='none'?fl:(item.lastScene||'')};
@@ -711,7 +713,7 @@ async function vfOpen(item){if(vf.on)return;stopRec();const pb=$('#photos');if(p
   vf.el=$('#vf');vf.video=$('#vfVideo');vf.canvas=$('#vfCanvas');
   vf.el.addEventListener('click',vfClick);vf.el.addEventListener('change',vfChange);vf.el.addEventListener('input',vfInput);
   vf.onResize=()=>{vfSize();setTimeout(vfSize,250);setTimeout(vfScrollFocal,300);};window.addEventListener('resize',vf.onResize);window.addEventListener('orientationchange',vf.onResize);
-  vf.onVis=()=>{if(document.visibilityState==='hidden'){vfClose();releaseCam();}};document.addEventListener('visibilitychange',vf.onVis);
+  vf.onVis=()=>{if(document.visibilityState==='hidden'&&!vf.hqPending){vfClose();releaseCam();}};document.addEventListener('visibilitychange',vf.onVis);
   vfSize();await vfStart();vfLoop();vfScrollFocal();}
 async function vfStart(force){vfStop(true);
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){vfWarn('Kamera wird in diesem Browser nicht unterstützt. App vom Home-Bildschirm in Safari öffnen.');return;}
@@ -749,27 +751,45 @@ function vfCamProblem(){if(vf.camErr)return;vf.camErr=true;try{vf.video.play();}
   const w=$('#vfWarn');if(!w)return;w.hidden=false;w.innerHTML='Kamerabild bleibt schwarz.<button data-vf="restart">Neu starten</button>';}
 function vfScrollFocal(){const b=document.querySelector(`.vf-mm[aria-pressed="true"]`);if(b)try{b.scrollIntoView({inline:'center',block:'nearest'});}catch{}}
 function vfSetMm(m){vf.s.mm=+m;document.querySelectorAll('.vf-mm').forEach(b=>b.setAttribute('aria-pressed',b.dataset.mm==m));const i=$('#vfMm');if(i)i.value=m;vfSave();}
-async function vfShoot(){const v=vf.video;const W=v.videoWidth,H=v.videoHeight;if(!W){toast('Kamera liefert noch kein Bild');vfCamProblem();return;}
-  const g=vfGeom(W,H);const outW=Math.round(Math.min(2400,Math.max(1600,g.cw)));const outH=Math.round(outW*g.ch/g.cw);const bar=Math.round(outW*0.032);
+async function vfCompose(src,W,H,hfo,extra){const g=vfGeom(W,H,hfo);const outW=Math.round(Math.min(4000,Math.max(1600,Math.min(g.cw,W))));const outH=Math.round(outW*g.ch/g.cw);const bar=Math.round(outW*0.032);
   const c=document.createElement('canvas');c.width=outW;c.height=outH+bar;const ctx=c.getContext('2d');ctx.imageSmoothingQuality='high';
-  drawCrop(ctx,v,W,H,g,0,0,outW,outH);drawLines(ctx,{x:0,y:0,w:outW,h:outH},Math.max(2,outW/900));
-  const hd=vfHeading();const now=new Date();
-  const txt=`${vfLabel(g)}${hd!=null?' · Blick '+deg(hd):''} · ${fmtDT(now.getTime())}`;
-  ctx.fillStyle='#111';ctx.fillRect(0,outH,outW,bar);ctx.fillStyle='#f0b23a';ctx.font=`600 ${Math.round(bar*.5)}px -apple-system,Helvetica,Arial,sans-serif`;ctx.textBaseline='middle';
-  let fs=Math.round(bar*.5);while(ctx.measureText(txt).width>outW-bar&&fs>8){fs--;ctx.font=`600 ${fs}px -apple-system,Helvetica,Arial,sans-serif`;}ctx.fillText(txt,bar*.5,outH+bar/2);
-  const sen=sensorObj();const meta={mm:+vf.s.mm,sensor:sen.l,sq:+vf.s.sq,ar:+vf.s.ar,hfov:+g.hf.toFixed(1),heading:hd!=null?Math.round(hd):null};const item=vf.item;
-  const f=$('#vfFlash');if(f){f.hidden=false;setTimeout(()=>f.hidden=true,120);}
-  const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.86));if(!blob){toast('Foto fehlgeschlagen');return;}
-  const ph={id:uid(),setupId:item.id,scene:vf.sceneId||'',buf:await blob.arrayBuffer(),type:'image/jpeg',caption:`${meta.mm}mm${meta.sq>1?' '+meta.sq+'x':''} · ${(ASPECTS.find(a=>a[0]==meta.ar)||[0,''])[1]}`,meta,created:Date.now()};
-  ph.thumb=await makeThumb(blob);await idb('photos','readwrite',st=>st.put(ph));item.photoCount=(item.photoCount||0)+1;touch(item);vf.shots++;
-  const u=URL.createObjectURL(blob);(vf.urls=vf.urls||[]).push({src:u,cap:ph.caption});const th=$('#vfThumb');if(th){th.style.backgroundImage=`url(${u})`;}
+  drawCrop(ctx,src,W,H,g,0,0,outW,outH);drawLines(ctx,{x:0,y:0,w:outW,h:outH},Math.max(2,outW/900));
+  const hd=vfHeading();const txt=`${vfLabel(g)}${extra?' · '+extra:''}${hd!=null?' · Blick '+deg(hd):''} · ${fmtDT(Date.now())}`;
+  ctx.fillStyle='#111';ctx.fillRect(0,outH,outW,bar);ctx.fillStyle='#f0b23a';let fs=Math.round(bar*.5);ctx.font=`600 ${fs}px -apple-system,Helvetica,Arial,sans-serif`;ctx.textBaseline='middle';
+  while(ctx.measureText(txt).width>outW-bar&&fs>8){fs--;ctx.font=`600 ${fs}px -apple-system,Helvetica,Arial,sans-serif`;}ctx.fillText(txt,bar*.5,outH+bar/2);
+  const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.92));
+  const sen=sensorObj();return {blob,g,meta:{mm:+vf.s.mm,sensor:sen.l,sq:+vf.s.sq,ar:+vf.s.ar,hfov:+g.hf.toFixed(1),heading:hd!=null?Math.round(hd):null,src:extra||'Live'}};}
+async function vfStore(r){const item=vf.item;if(!r.blob){toast('Foto fehlgeschlagen');return;}const meta=r.meta;
+  const ph={id:uid(),setupId:item.id,scene:vf.sceneId||'',buf:await r.blob.arrayBuffer(),type:'image/jpeg',caption:`${meta.mm}mm${meta.sq>1?' '+meta.sq+'x':''} · ${(ASPECTS.find(a=>a[0]==meta.ar)||[0,''])[1]}`,meta,created:Date.now()};
+  ph.thumb=await makeThumb(r.blob);await idb('photos','readwrite',st=>st.put(ph));item.photoCount=(item.photoCount||0)+1;touch(item);vf.shots++;
+  const u=URL.createObjectURL(r.blob);(vf.urls=vf.urls||[]).push({src:u,cap:ph.caption});const th=$('#vfThumb');if(th){th.style.backgroundImage=`url(${u})`;}
   const vc=$('#vfCount');if(vc)vc.textContent=vf.shots+' neu';}
+async function vfShoot(){const v=vf.video;const W=v.videoWidth,H=v.videoHeight;if(!W){toast('Kamera liefert noch kein Bild');vfCamProblem();return;}
+  const f=$('#vfFlash');if(f){f.hidden=false;setTimeout(()=>f.hidden=true,120);}
+  const r=await vfCompose(v,W,H,null,null);await vfStore(r);}
+/* HQ: echtes iPhone-Foto (volle Auflösung, Apple-Bildverarbeitung), danach gleicher Ausschnitt + Framelines. Bildwinkel aus EXIF (35mm-Äquivalent). */
+function exifFocal35(buf){try{const d=new DataView(buf);if(d.getUint16(0)!==0xFFD8)return null;let o=2;
+  while(o<d.byteLength-4){const m=d.getUint16(o);const len=d.getUint16(o+2);if(m===0xFFE1&&d.getUint32(o+4)===0x45786966){const t=o+10;const le=d.getUint16(t)===0x4949;
+      const u16=x=>d.getUint16(x,le),u32=x=>d.getUint32(x,le);
+      const findTag=(ifd,tag)=>{const n=u16(ifd);for(let i=0;i<n;i++){const e=ifd+2+i*12;if(u16(e)===tag)return e;}return null;};
+      const ifd0=t+u32(t+4);const ex=findTag(ifd0,0x8769);if(!ex)return null;const exifIfd=t+u32(ex+8);
+      const e35=findTag(exifIfd,0xA405);if(e35){const v=u16(e35+8);if(v>0)return v;}return null;}
+    if((m&0xFF00)!==0xFF00)break;o+=2+len;}}catch{}return null;}
+async function vfHQ(file){vf.hqPending=false;if(!file)return;toast('Foto wird berechnet…');
+  try{const buf=await file.arrayBuffer();const f35=exifFocal35(buf);const img=await loadImg(new Blob([buf],{type:file.type||'image/jpeg'}));
+    const W=img.naturalWidth,H=img.naturalHeight;const a=Math.max(W,H)/Math.min(W,H);const longEq=43.27*a/Math.sqrt(1+a*a);
+    const hfo=f35?2*Math.atan(longEq/2/f35)/RAD:null;
+    const r=await vfCompose(img,W,H,hfo,`HQ ${f35?f35+'mm-Äq.':'iPhone'}`);await vfStore(r);
+    toast(f35?`HQ-Foto gespeichert (iPhone ${f35} mm KB)`:'HQ-Foto gespeichert – Bildwinkel aus Kalibrierung');}
+  catch(e){toast('HQ-Foto fehlgeschlagen: '+e.message);}
+  if(vf.on&&!liveStream(vf.stream))vfStart(true);}
 async function vfCompass(btn){
   try{if(window.DeviceOrientationEvent&&typeof DeviceOrientationEvent.requestPermission==='function'){const r=await DeviceOrientationEvent.requestPermission();if(r!=='granted'){toast('Kompass nicht erlaubt');return;}}}catch(e){toast('Kompass: '+e.message);return;}
   vf.onOri=e=>{if(typeof e.webkitCompassHeading==='number')vf.heading=e.webkitCompassHeading;else if(e.absolute&&e.alpha!=null)vf.heading=(360-e.alpha)%360;};
   window.addEventListener('deviceorientation',vf.onOri);btn.textContent='Kompass an';toast('Kompass aktiv – Blickrichtung wird ins Foto geschrieben (±10°)');}
 function vfClick(e){if(e.target.closest('#vfThumb')&&vf.urls&&vf.urls.length){vwOpen(vf.urls,vf.urls.length-1,null);return;}const mmb=e.target.closest('[data-mm]');if(mmb){vfSetMm(mmb.dataset.mm);return;}
   const b=e.target.closest('[data-vf]');if(!b)return;const a=b.dataset.vf;
+  if(a==='hq'){vf.hqPending=true;setTimeout(()=>{vf.hqPending=false;},120000);return;}
   if(a==='restart'){vf.camErr=false;vf.lastWarn=null;vfWarn('');vf.started=0;vfStart(true);return;}
   if(a==='close')vfClose();else if(a==='shoot')vfShoot().catch(err=>toast('Fehler: '+err.message));
   else if(a==='set')$('#vfSet').hidden=false;else if(a==='setclose')$('#vfSet').hidden=true;
@@ -777,6 +797,7 @@ function vfClick(e){if(e.target.closest('#vfThumb')&&vf.urls&&vf.urls.length){vw
   else if(a==='compass')vfCompass(b);
   else if(a==='hires'){vf.s.hires=!vf.s.hires;b.textContent='4K-Kamerastream: '+(vf.s.hires?'an':'aus');vfSave();vfStart();}}
 function vfChange(e){const t=e.target;
+  if(t.id==='vfHQ'){const f=t.files&&t.files[0];t.value='';vfHQ(f);return;}
   if(t.id==='vfScene'){vf.sceneId=t.value;vf.item.lastScene=t.value;touch(vf.item);return;}
   if(t.id==='vfSensor')vf.s.sensor=t.value;else if(t.id==='vfSq')vf.s.sq=+t.value;else if(t.id==='vfAr')vf.s.ar=+t.value;
   else if(t.id==='vfCam'){vf.s.dev=t.value;vfStart();}
