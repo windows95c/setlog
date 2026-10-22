@@ -254,7 +254,19 @@ window.addEventListener('unhandledrejection',function(e){var r=e.reason;window._
 </script>
 <script>
 'use strict';
-const APP_VERSION='1.4.1';
+const APP_VERSION='1.4.2';
+/* Kamera/Mikro offen halten: iOS fragt bei jedem neuen Zugriff erneut – Streams werden daher wiederverwendet und erst nach Leerlauf freigegeben */
+const KEEP_MS=3*60000;const media={cam:null,camKey:'',camT:0,mic:null,micT:0};
+const liveStream=s=>!!(s&&s.getTracks().some(t=>t.readyState==='live'));
+async function getCam(video,force){clearTimeout(media.camT);const key=JSON.stringify(video);
+  if(!force&&liveStream(media.cam)&&media.camKey===key)return media.cam;releaseCam();
+  media.cam=await navigator.mediaDevices.getUserMedia({audio:false,video});media.camKey=key;return media.cam;}
+function releaseCam(){clearTimeout(media.camT);if(media.cam)media.cam.getTracks().forEach(t=>t.stop());media.cam=null;}
+function parkCam(){clearTimeout(media.camT);media.camT=setTimeout(releaseCam,KEEP_MS);}
+async function getMic(){clearTimeout(media.micT);if(liveStream(media.mic))return media.mic;media.mic=await navigator.mediaDevices.getUserMedia({audio:true});return media.mic;}
+function releaseMic(){clearTimeout(media.micT);if(media.mic)media.mic.getTracks().forEach(t=>t.stop());media.mic=null;}
+function parkMic(){clearTimeout(media.micT);media.micT=setTimeout(releaseMic,KEEP_MS);}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&!(typeof vf!=='undefined'&&vf.on)&&!(typeof rec!=='undefined'&&rec)){releaseCam();releaseMic();}});
 const $=s=>document.querySelector(s);
 const app=$('#app');
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -532,13 +544,13 @@ async function toggleRec(s,btn,take){
   if(rec){rec.mr.stop();return;}
   await flush();
   if(!navigator.mediaDevices||!window.MediaRecorder){toast('Audioaufnahme wird hier nicht unterstützt. Nutze die Diktiertaste.');return;}
-  let stream;try{stream=await navigator.mediaDevices.getUserMedia({audio:true});}catch(e){toast('Kein Mikrofonzugriff: '+e.message);return;}
+  let stream;try{stream=await getMic();}catch(e){toast('Kein Mikrofonzugriff: '+e.message);return;}
   const type=['audio/mp4','audio/aac','audio/webm'].find(t=>MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(t));
   const mr=new MediaRecorder(stream,type?{mimeType:type}:undefined);const chunks=[];const t0=Date.now();
   rec={mr,stream,btn,timer:setInterval(()=>{const b=rec&&rec.btn&&rec.btn.isConnected?rec.btn:$('#recBtn');if(b){const sec=Math.round((Date.now()-t0)/1000);b.textContent=`■ Stopp ${Math.floor(sec/60)}:${pad2(sec%60)}`;}},500)};
   btn.classList.add('rec');btn.textContent='■ Stopp 0:00';
   mr.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data);};
-  mr.onstop=async()=>{clearInterval(rec.timer);stream.getTracks().forEach(t=>t.stop());rec=null;
+  mr.onstop=async()=>{clearInterval(rec.timer);parkMic();rec=null;
     const blob=new Blob(chunks,{type:mr.mimeType||type||'audio/mp4'});if(!blob.size){toast('Aufnahme leer');rerender();return;}
     const m={id:uid(),t:nowHM(),text:'',audio:true,done:false,created:Date.now()};if(take)m.take=String(take);
     const abuf=await blob.arrayBuffer();
@@ -699,13 +711,13 @@ async function vfOpen(item){if(vf.on)return;stopRec();const pb=$('#photos');if(p
   vf.el=$('#vf');vf.video=$('#vfVideo');vf.canvas=$('#vfCanvas');
   vf.el.addEventListener('click',vfClick);vf.el.addEventListener('change',vfChange);vf.el.addEventListener('input',vfInput);
   vf.onResize=()=>{vfSize();setTimeout(vfSize,250);setTimeout(vfScrollFocal,300);};window.addEventListener('resize',vf.onResize);window.addEventListener('orientationchange',vf.onResize);
-  vf.onVis=()=>{if(document.visibilityState==='hidden')vfClose();};document.addEventListener('visibilitychange',vf.onVis);
+  vf.onVis=()=>{if(document.visibilityState==='hidden'){vfClose();releaseCam();}};document.addEventListener('visibilitychange',vf.onVis);
   vfSize();await vfStart();vfLoop();vfScrollFocal();}
-async function vfStart(){vfStop(true);
+async function vfStart(force){vfStop(true);
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){vfWarn('Kamera wird in diesem Browser nicht unterstützt. App vom Home-Bildschirm in Safari öffnen.');return;}
   const hi=!!vf.s.hires;const v={width:{ideal:hi?3840:1920},height:{ideal:hi?2160:1080}};if(vf.s.dev)v.deviceId={exact:vf.s.dev};else v.facingMode={ideal:'environment'};
-  try{vf.stream=await navigator.mediaDevices.getUserMedia({audio:false,video:v});}
-  catch(e){if(vf.s.dev){vf.s.dev='';return vfStart();}vfWarn('Kein Kamerazugriff: '+(e.message||e.name)+'. Einstellungen → Safari → Kamera → Erlauben.');return;}
+  try{vf.stream=await getCam(v,force);}
+  catch(e){if(vf.s.dev){vf.s.dev='';return vfStart(force);}vfWarn('Kein Kamerazugriff: '+(e.message||e.name)+'. Einstellungen → Safari → Kamera → Erlauben.');return;}
   vf.video.srcObject=vf.stream;vf.video.muted=true;vf.video.setAttribute('playsinline','');
   vf.video.onloadedmetadata=()=>{vf.video.play().catch(()=>{});};try{await vf.video.play();}catch{}
   vf.started=Date.now();vf.blackSince=0;vf.retried=vf.retried||0;
@@ -713,7 +725,7 @@ async function vfStart(){vfStop(true);
   try{const devs=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput'&&!/front|vorder/i.test(d.label));
     if(devs.length>1){const sel=$('#vfCam');sel.innerHTML=devs.map(d=>`<option value="${esc(d.deviceId)}"${d.label===vf.label?' selected':''}>${esc(d.label||'Kamera')}</option>`).join('');$('#vfCamWrap').hidden=false;}}catch{}
   const hf=$('#vfHf');if(hf)hf.value=curHfov();}
-function vfStop(keep){if(vf.video){try{vf.video.srcObject=null;}catch{}}if(vf.stream){vf.stream.getTracks().forEach(t=>t.stop());vf.stream=null;}if(!keep&&vf.raf)cancelAnimationFrame(vf.raf);}
+function vfStop(keep){if(vf.video){try{vf.video.srcObject=null;}catch{}}vf.stream=null;if(!keep){if(vf.raf)cancelAnimationFrame(vf.raf);parkCam();}}
 function vfClose(){if(!vf.on)return;vf.on=false;vfStop();window.removeEventListener('resize',vf.onResize);window.removeEventListener('orientationchange',vf.onResize);document.removeEventListener('visibilitychange',vf.onVis);
   if(vf.onOri)window.removeEventListener('deviceorientation',vf.onOri);vf.el&&vf.el.remove();(vf.urls||[]).forEach(x=>URL.revokeObjectURL(x.src));vf.urls=[];document.body.classList.remove('vf-open');const n=vf.shots;vfSave();
   rerender();if(n)toast(`${n} Sucher-Foto${n>1?'s':''} gespeichert`);}
@@ -758,7 +770,7 @@ async function vfCompass(btn){
   window.addEventListener('deviceorientation',vf.onOri);btn.textContent='Kompass an';toast('Kompass aktiv – Blickrichtung wird ins Foto geschrieben (±10°)');}
 function vfClick(e){if(e.target.closest('#vfThumb')&&vf.urls&&vf.urls.length){vwOpen(vf.urls,vf.urls.length-1,null);return;}const mmb=e.target.closest('[data-mm]');if(mmb){vfSetMm(mmb.dataset.mm);return;}
   const b=e.target.closest('[data-vf]');if(!b)return;const a=b.dataset.vf;
-  if(a==='restart'){vf.camErr=false;vf.lastWarn=null;vfWarn('');vf.started=0;vfStart();return;}
+  if(a==='restart'){vf.camErr=false;vf.lastWarn=null;vfWarn('');vf.started=0;vfStart(true);return;}
   if(a==='close')vfClose();else if(a==='shoot')vfShoot().catch(err=>toast('Fehler: '+err.message));
   else if(a==='set')$('#vfSet').hidden=false;else if(a==='setclose')$('#vfSet').hidden=true;
   else if(a==='lines'){vf.s.lines=!vf.s.lines;b.textContent='Drittel-Linien: '+(vf.s.lines?'an':'aus');vfSave();}
