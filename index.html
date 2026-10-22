@@ -199,7 +199,7 @@ body.vf-open{overflow:hidden}
 </header>
 <main id="app"></main>
 <div id="toast" role="status" hidden></div>
-<div id="sheet" hidden><div class="sheet-in"><p id="sheetMsg" class="hint"></p><button class="btn primary block" id="sheetGo">Datei teilen / sichern</button><button class="btn block" id="sheetX">Schließen</button></div></div>
+<div id="sheet" hidden><div class="sheet-in"><p id="sheetMsg" class="hint"></p><button class="btn primary block" id="sheetGo">Teilen …</button><p class="hint">Im Teilen-Menü: <b>In Dateien sichern</b> – oder direkt an die Claude-App senden.</p><button class="btn block" id="sheetX">Schließen</button></div></div>
 <div id="viewer" hidden role="dialog" aria-label="Fotos"><div class="vw-top"><span id="vwCount" class="mono"></span><span id="vwCap"></span><button id="vwClose" class="vw-x" aria-label="Schließen">✕</button></div><div id="vwTrack"></div></div>
 <script>
 window.__fatal=function(m){try{var a=document.getElementById('app');if(!a)return;var d=document.createElement('div');d.className='empty';d.style.textAlign='left';d.style.color='var(--warn)';d.textContent='Fehler: '+m;a.appendChild(d);var s=document.getElementById('sub');if(s)s.textContent='Startfehler – Screenshot an Claude';}catch(e){}};
@@ -208,7 +208,7 @@ window.addEventListener('unhandledrejection',function(e){var r=e.reason;window._
 </script>
 <script>
 'use strict';
-const APP_VERSION='1.2.0';
+const APP_VERSION='1.2.1';
 const $=s=>document.querySelector(s);
 const app=$('#app');
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -837,13 +837,21 @@ async function importBackup(file){if(!file)return;
     toast(`Backup geladen: ${p?p.name:''} (${ph.length} Fotos)`);rerender();}
   catch(e){toast('Import fehlgeschlagen: '+e.message);}}
 function download(file){const a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=file.name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},5000);}
+const fmtSize=n=>n>1e6?(n/1e6).toFixed(1)+' MB':Math.max(1,Math.round(n/1e3))+' KB';
+const isIOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+function shareable(file){try{return !!(navigator.canShare&&navigator.canShare({files:[file]}));}catch{return false;}}
 async function shareFile(file){
-  if(navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file]});return 'ok';}catch(e){if(e.name==='AbortError')return 'abort';if(e.name==='NotAllowedError')return 'needtap';}}
+  if(shareable(file)){try{await navigator.share({files:[file],title:file.name});return 'ok';}
+    catch(e){if(e.name==='AbortError')return 'abort';return 'err:'+(e.message||e.name);}}
+  if(isIOS){const u=URL.createObjectURL(file);const w=window.open(u,'_blank');setTimeout(()=>URL.revokeObjectURL(u),60000);return w?'ok':'err:Teilen nicht unterstützt';}
   download(file);return 'ok';}
-function deliver(name,content,type,onDone){const file=new File([content],name,{type});
-  shareFile(file).then(r=>{if(r==='ok')onDone&&onDone();
-    if(r==='needtap'){$('#sheetMsg').textContent=`${name} ist bereit.`;$('#sheet').hidden=false;
-      $('#sheetGo').onclick=async()=>{const r2=await shareFile(file);if(r2!=='needtap')$('#sheet').hidden=true;if(r2==='ok')onDone&&onDone();};}});}
+// Datei vorbereiten, dann per eigenem Tipp teilen (iOS verlangt eine frische Nutzeraktion; json-Typ wird von iOS oft abgelehnt → text/plain)
+function deliver(name,content,type,onDone){let file=new File([content],name,{type});
+  if(!shareable(file)){const alt=new File([content],name,{type:'text/plain'});if(shareable(alt))file=alt;}
+  $('#sheetMsg').textContent=`${name} · ${fmtSize(file.size)} – bereit.`;$('#sheet').hidden=false;
+  $('#sheetGo').onclick=async()=>{const r=await shareFile(file);
+    if(r==='ok'){$('#sheet').hidden=true;onDone&&onDone();}
+    else if(r.startsWith('err:'))toast('Teilen fehlgeschlagen: '+r.slice(4));};}
 $('#sheetX').onclick=()=>$('#sheet').hidden=true;
 let vw={list:[]};
 function vwOpen(list,idx){vw.list=list;const tr=$('#vwTrack');
@@ -918,8 +926,8 @@ app.addEventListener('click',async e=>{
     case 'backup':{const p=S.get(b.dataset.id);await flush();toast('Backup wird erstellt…');const json=await buildBackup(p);
       deliver(`${slug(p.name)}_setlog_backup_${today()}.json`,json,'application/json',()=>{p.lastBackup=Date.now();touch(p);rerender();});break;}
     case 'copyMemos':{const txt=memoExport(S.get(b.dataset.id)).text;try{await navigator.clipboard.writeText(txt);toast('Kopiert – jetzt in Claude einfügen');}catch{const r=document.createRange();r.selectNodeContents($('#memoText'));const sel=getSelection();sel.removeAllRanges();sel.addRange(r);toast('Text markiert – „Kopieren“ wählen');}break;}
-    case 'shareMemoPkg':{const p=S.get(b.dataset.id);await flush();toast('Paket wird erstellt…');const pk=await memoPackage(p);
-      deliver(`${slug(p.name)}_memos_${today()}.setlog.json`,pk.json,'application/json',()=>toast(`Paket mit ${pk.count} Memos (${pk.audio} Audio) bereit – im Claude-Chat anhängen`));break;}
+    case 'shareMemoPkg':{const p=S.get(b.dataset.id);await flush();toast('Paket wird erstellt…');const pk=await memoPackage(p);if(!pk.count){toast('Keine offenen Memos');break;}
+      deliver(`${slug(p.name)}_memos_${today()}_setlog.txt`,pk.json,'text/plain',()=>toast(`Paket mit ${pk.count} Memos (${pk.audio} Audio) bereit – im Claude-Chat anhängen`));break;}
     case 'shareMemos':{const p=S.get(b.dataset.id);deliver(`${slug(p.name)}_memos_${today()}.txt`,memoExport(p).text,'text/plain');break;}
     case 'applyPatch':{const p=S.get(b.dataset.id);const out=$('#patchOut');
       if(b.dataset.ready&&pendingPatch){applyPatch(p,pendingPatch,false);
