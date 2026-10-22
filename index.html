@@ -192,7 +192,8 @@ a.btn{text-decoration:none}
 body.vf-open{overflow:hidden}
 #vf{position:fixed;inset:0;z-index:60;background:#000;color:#eee;display:flex;flex-direction:column;
   padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
-#vfVideo{position:absolute;width:2px;height:2px;opacity:.01;pointer-events:none;top:0;left:0}
+#vfVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none;background:#000}
+.vf-warn button{margin-left:8px;font:inherit;font-weight:700;background:#fff;color:#b3261e;border:none;border-radius:6px;padding:4px 10px}
 .vf-top{display:flex;gap:6px;align-items:center;padding:6px 8px;overflow-x:auto;flex:none}
 .vf-top select{font:inherit;font-size:14px;color:#eee;background:#1d2024;border:1px solid #333;border-radius:8px;min-height:38px;padding:0 8px;max-width:46vw;flex:0 1 auto;min-width:0}
 .vf-ic{flex:none;width:40px;height:40px;border-radius:20px;border:1px solid #333;background:#1d2024;color:#eee;font-size:18px;cursor:pointer}
@@ -253,7 +254,7 @@ window.addEventListener('unhandledrejection',function(e){var r=e.reason;window._
 </script>
 <script>
 'use strict';
-const APP_VERSION='1.4.0';
+const APP_VERSION='1.4.1';
 const $=s=>document.querySelector(s);
 const app=$('#app');
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -482,14 +483,17 @@ function camCard(s,c,i){const k=f=>`cams.${i}.${f}`;
 /* ---------- Photos ---------- */
 let photoCache=new Map();
 const photoUI={filter:{},sel:null,order:[]};
+async function makeThumb(blob){try{const im=await loadImg(blob);const k=Math.min(1,400/Math.max(im.naturalWidth,im.naturalHeight));const c=document.createElement('canvas');c.width=Math.round(im.naturalWidth*k);c.height=Math.round(im.naturalHeight*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);const b=await new Promise(r=>c.toBlob(r,'image/jpeg',.75));return b?await b.arrayBuffer():null;}catch{return null;}}
+async function ensureThumbs(list){const miss=list.filter(ph=>!ph.thumb);for(const ph of miss){ph.thumb=await makeThumb(phBlob(ph));if(ph.thumb)await idb('photos','readwrite',st=>st.put(ph));}return miss.length;}
 function scenesOf(it){const p=it&&projectOf(it);return ((p&&p.scenes)||[]).filter(s=>s&&(s.n||s.name));}
 function sceneLabel(sc){return sc?`Sz ${sc.n||'?'}${sc.name?' · '+sc.name:''}`:'Ohne Szene';}
 function curItem(){const c=nav[nav.length-1];return c&&S.get(c.id);}
 async function fillPhotos(s){const box=$('#photos');if(!box)return;
   const list=await getPhotos(s.id);photoCache=new Map(list.map(p=>[p.id,p]));
+  if(list.some(ph=>!ph.thumb)){box.innerHTML='<p class="hint">Vorschaubilder werden erstellt…</p>';await ensureThumbs(list);if(!$('#photos'))return;}
   const scs=scenesOf(s);const valid=new Set(scs.map(x=>x.id));const sceneOf=ph=>valid.has(ph.scene)?ph.scene:'';
   let f=photoUI.filter[s.id]||'all';if(f!=='all'&&f!=='none'&&!valid.has(f))f='all';
-  const urls=new Map(list.map(ph=>{const u=URL.createObjectURL(phBlob(ph));objURLs.push(u);return [ph.id,u];}));
+  const urls=new Map(list.map(ph=>{const u=URL.createObjectURL(ph.thumb?new Blob([ph.thumb],{type:'image/jpeg'}):phBlob(ph));objURLs.push(u);return [ph.id,u];}));
   let groups;
   if(f==='all'&&scs.length)groups=[...scs.map(sc=>({sc,items:list.filter(ph=>sceneOf(ph)===sc.id)})),{sc:null,items:list.filter(ph=>!sceneOf(ph))}].filter(g=>g.items.length);
   else groups=[{sc:undefined,items:f==='all'?list:list.filter(ph=>f==='none'?!sceneOf(ph):sceneOf(ph)===f)}];
@@ -499,7 +503,7 @@ async function fillPhotos(s){const box=$('#photos');if(!box)return;
   const selbar=sel?`<div class="selbar"><strong class="mono">${sel.size} ausgewählt</strong>${scs.length?`<div class="chips small">${scs.map(sc=>`<button type="button" class="chip" data-act="assignSel" data-val="${sc.id}">→ Sz ${esc(sc.n||'?')}</button>`).join('')}<button type="button" class="chip" data-act="assignSel" data-val="">→ Ohne</button></div>`:'<p class="hint">Im Projekt Szenen anlegen, dann hier zuordnen.</p>'}<div class="btns"><button class="btn ghost-danger" data-act="delSel" data-confirm>Löschen</button><button class="btn primary" data-act="selMode">Fertig</button></div></div>`:'';
   box.innerHTML=list.length?`${fchips}${selbar}${groups.map(g=>`${g.sc!==undefined?`<h3 class="ph-h">${esc(sceneLabel(g.sc))} <span class="mono">${g.items.length}</span></h3>`:''}<div class="thumbs">${g.items.map(thumb).join('')}</div>`).join('')||'<p class="hint">Keine Fotos in diesem Filter.</p>'}${sel?'':`<button type="button" class="btn" data-act="selMode">Mehrere auswählen</button>`}`
     :'<p class="hint">Noch keine Fotos – unten <b>Sucher</b> oder <b>Foto</b>.</p>';
-  photoUI.order=groups.flatMap(g=>g.items).map(ph=>({src:urls.get(ph.id),cap:ph.caption,pid:ph.id}));
+  photoUI.order=groups.flatMap(g=>g.items).map(ph=>({cap:ph.caption,pid:ph.id}));
   if(s.photoCount!==list.length){s.photoCount=list.length;touch(s);}
   const c=$('#phCount');if(c)c.textContent=list.length;}
 async function setPhotoScene(ids,scene){const list=ids.map(id=>photoCache.get(id)).filter(Boolean);list.forEach(ph=>ph.scene=scene||'');
@@ -514,7 +518,7 @@ async function shrink(file){const url=URL.createObjectURL(file);
   catch(e){return {buf:await file.arrayBuffer(),type:file.type||'image/jpeg'};}
   finally{URL.revokeObjectURL(url);}}
 async function addPhotos(s,files){if(!files.length)return;const fl=photoUI.filter[s.id];const scene=fl&&fl!=='all'&&fl!=='none'?fl:'';toast(files.length>1?`${files.length} Fotos werden gespeichert…`:'Foto wird gespeichert…');
-  for(const f of files){const {buf,type}=await shrink(f);const ph={id:uid(),setupId:s.id,buf,type,caption:'',scene,created:Date.now()};await idb('photos','readwrite',st=>st.put(ph));}
+  for(const f of files){const {buf,type}=await shrink(f);const ph={id:uid(),setupId:s.id,buf,type,caption:'',scene,created:Date.now()};ph.thumb=await makeThumb(new Blob([buf],{type}));await idb('photos','readwrite',st=>st.put(ph));}
   await fillPhotos(s);toast('Gespeichert');}
 let capT;
 function saveCaption(id,val){const ph=photoCache.get(id);if(!ph)return;ph.caption=val;clearTimeout(capT);capT=setTimeout(()=>idb('photos','readwrite',st=>st.put(ph)).catch(e=>toast('Fehler: '+e.message)),400);}
@@ -645,7 +649,7 @@ const FOCALS=[12,14,16,18,21,25,29,32,35,40,50,65,75,85,100,135,180];
 const VF_KEY='setlog-vf';
 let vf={on:false};
 function vfLoad(){let s={};try{s=JSON.parse(localStorage.getItem(VF_KEY)||'{}')||{};}catch{}return Object.assign({sensor:'a35og',sq:1,ar:2.39,mm:35,hfov:{},lines:true},s);}
-function vfSave(){try{localStorage.setItem(VF_KEY,JSON.stringify({sensor:vf.s.sensor,sq:vf.s.sq,ar:vf.s.ar,mm:vf.s.mm,hfov:vf.s.hfov,lines:vf.s.lines,dev:vf.s.dev}));}catch{}}
+function vfSave(){try{localStorage.setItem(VF_KEY,JSON.stringify({sensor:vf.s.sensor,sq:vf.s.sq,ar:vf.s.ar,mm:vf.s.mm,hfov:vf.s.hfov,lines:vf.s.lines,dev:vf.s.dev,hires:!!vf.s.hires}));}catch{}}
 function defHfov(label){label=String(label||'');if(/ultra|weitwinkel/i.test(label))return 106;if(/tele/i.test(label))return 36.8;return 67.2;}
 const curHfov=()=>{const k=vf.label||'default';return +vf.s.hfov[k]||defHfov(vf.label);};
 const sensorObj=()=>SENSORS.find(x=>x.id===vf.s.sensor)||SENSORS[0];
@@ -671,14 +675,13 @@ function vfHeading(){if(vf.heading==null)return null;return (vf.heading+360)%360
 
 function finderHTML(p){const pf=projectFocals(p);const all=[...new Set([...pf,...FOCALS])].sort((a,b)=>a-b);
   return `<div id="vf" role="dialog" aria-label="Sucher">
-  <video id="vfVideo" playsinline muted autoplay></video>
   <div class="vf-top"><button class="vf-ic" data-vf="close" aria-label="Schließen">✕</button>
     <select id="vfSensor" aria-label="Sensorformat">${SENSORS.map(s=>`<option value="${s.id}"${s.id===vf.s.sensor?' selected':''}>${esc(s.l)}</option>`).join('')}</select>
     <select id="vfSq" aria-label="Squeeze">${SQUEEZE.map(q=>`<option value="${q}"${q==vf.s.sq?' selected':''}>${q===1?'Sphärisch':q+'x Anamorph'}</option>`).join('')}</select>
     ${scenesOf(vf.item).length?`<select id="vfScene" aria-label="Szene"><option value="">Szene –</option>${scenesOf(vf.item).map(sc=>`<option value="${sc.id}"${sc.id===vf.sceneId?' selected':''}>${esc(sceneLabel(sc))}</option>`).join('')}</select>`:''}
     <select id="vfAr" aria-label="Framelines">${ASPECTS.map(a=>`<option value="${a[0]}"${a[0]==vf.s.ar?' selected':''}>${a[1]}</option>`).join('')}</select>
     <button class="vf-ic" data-vf="set" aria-label="Einstellungen">⚙</button></div>
-  <div class="vf-stage"><canvas id="vfCanvas"></canvas><div id="vfInfo" class="vf-info mono"></div><div id="vfWarn" class="vf-warn" hidden></div><div id="vfFlash" class="vf-flash" hidden></div></div>
+  <div class="vf-stage"><video id="vfVideo" playsinline muted autoplay></video><canvas id="vfCanvas"></canvas><div id="vfInfo" class="vf-info mono"></div><div id="vfWarn" class="vf-warn" hidden></div><div id="vfFlash" class="vf-flash" hidden></div></div>
   <div class="vf-bot">
     <div class="vf-focals" id="vfFocals">${all.map(m=>`<button class="vf-mm${pf.includes(m)?' own':''}" data-mm="${m}" aria-pressed="${m==vf.s.mm}">${m}</button>`).join('')}</div>
     <div class="vf-row"><div class="vf-thumb" id="vfThumb"></div><button class="vf-shutter" data-vf="shoot" aria-label="Foto aufnehmen"></button><div class="vf-count mono" id="vfCount"></div></div>
@@ -688,10 +691,10 @@ function finderHTML(p){const pf=projectFocals(p);const all=[...new Set([...pf,..
     <label class="fld" id="vfCamWrap" hidden><span>iPhone-Kamera</span><select id="vfCam"></select></label>
     <label class="fld"><span>Kalibrierung: horizontaler Bildwinkel dieser iPhone-Kamera (°)</span><input id="vfHf" type="number" inputmode="decimal" step="0.1" value="${curHfov()}"></label>
     <p class="hint">iPhone 12 Hauptkamera ≈ 67°, Ultra-Weitwinkel ≈ 106°. Prüfen: Objekt mit Breite B aus Abstand D bildfüllend → 2·atan(B/2D).</p>
-    <div class="btns"><button class="btn" data-vf="lines">Drittel-Linien: ${vf.s.lines?'an':'aus'}</button><button class="btn" data-vf="compass">${vf.heading!=null?'Kompass an':'Kompass aktivieren'}</button></div>
+    <div class="btns"><button class="btn" data-vf="lines">Drittel-Linien: ${vf.s.lines?'an':'aus'}</button><button class="btn" data-vf="hires">4K-Kamerastream: ${vf.s.hires?'an':'aus'}</button><button class="btn" data-vf="compass">${vf.heading!=null?'Kompass an':'Kompass aktivieren'}</button></div>
     <button class="btn primary block" data-vf="setclose">Fertig</button></div>
   </div>`;}
-async function vfOpen(item){if(vf.on)return;const p=projectOf(item);const fl=photoUI.filter[item.id];vf={on:true,item,s:vfLoad(),heading:vf.heading??null,shots:0,sceneId:fl&&fl!=='all'&&fl!=='none'?fl:(item.lastScene||'')};
+async function vfOpen(item){if(vf.on)return;stopRec();const pb=$('#photos');if(pb){pb.innerHTML='';objURLs.forEach(u=>URL.revokeObjectURL(u));objURLs=[];}const p=projectOf(item);const fl=photoUI.filter[item.id];vf={on:true,item,s:vfLoad(),heading:vf.heading??null,shots:0,sceneId:fl&&fl!=='all'&&fl!=='none'?fl:(item.lastScene||'')};
   document.body.insertAdjacentHTML('beforeend',finderHTML(p));document.body.classList.add('vf-open');
   vf.el=$('#vf');vf.video=$('#vfVideo');vf.canvas=$('#vfCanvas');
   vf.el.addEventListener('click',vfClick);vf.el.addEventListener('change',vfChange);vf.el.addEventListener('input',vfInput);
@@ -700,18 +703,20 @@ async function vfOpen(item){if(vf.on)return;const p=projectOf(item);const fl=pho
   vfSize();await vfStart();vfLoop();vfScrollFocal();}
 async function vfStart(){vfStop(true);
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){vfWarn('Kamera wird in diesem Browser nicht unterstützt. App vom Home-Bildschirm in Safari öffnen.');return;}
-  const v={width:{ideal:3840},height:{ideal:2160}};if(vf.s.dev)v.deviceId={exact:vf.s.dev};else v.facingMode={ideal:'environment'};
+  const hi=!!vf.s.hires;const v={width:{ideal:hi?3840:1920},height:{ideal:hi?2160:1080}};if(vf.s.dev)v.deviceId={exact:vf.s.dev};else v.facingMode={ideal:'environment'};
   try{vf.stream=await navigator.mediaDevices.getUserMedia({audio:false,video:v});}
   catch(e){if(vf.s.dev){vf.s.dev='';return vfStart();}vfWarn('Kein Kamerazugriff: '+(e.message||e.name)+'. Einstellungen → Safari → Kamera → Erlauben.');return;}
-  vf.video.srcObject=vf.stream;try{await vf.video.play();}catch{}
+  vf.video.srcObject=vf.stream;vf.video.muted=true;vf.video.setAttribute('playsinline','');
+  vf.video.onloadedmetadata=()=>{vf.video.play().catch(()=>{});};try{await vf.video.play();}catch{}
+  vf.started=Date.now();vf.blackSince=0;vf.retried=vf.retried||0;
   const tr=vf.stream.getVideoTracks()[0];vf.label=tr&&tr.label||'';
   try{const devs=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput'&&!/front|vorder/i.test(d.label));
     if(devs.length>1){const sel=$('#vfCam');sel.innerHTML=devs.map(d=>`<option value="${esc(d.deviceId)}"${d.label===vf.label?' selected':''}>${esc(d.label||'Kamera')}</option>`).join('');$('#vfCamWrap').hidden=false;}}catch{}
   const hf=$('#vfHf');if(hf)hf.value=curHfov();}
-function vfStop(keep){if(vf.stream){vf.stream.getTracks().forEach(t=>t.stop());vf.stream=null;}if(!keep&&vf.raf)cancelAnimationFrame(vf.raf);}
+function vfStop(keep){if(vf.video){try{vf.video.srcObject=null;}catch{}}if(vf.stream){vf.stream.getTracks().forEach(t=>t.stop());vf.stream=null;}if(!keep&&vf.raf)cancelAnimationFrame(vf.raf);}
 function vfClose(){if(!vf.on)return;vf.on=false;vfStop();window.removeEventListener('resize',vf.onResize);window.removeEventListener('orientationchange',vf.onResize);document.removeEventListener('visibilitychange',vf.onVis);
   if(vf.onOri)window.removeEventListener('deviceorientation',vf.onOri);vf.el&&vf.el.remove();(vf.urls||[]).forEach(x=>URL.revokeObjectURL(x.src));vf.urls=[];document.body.classList.remove('vf-open');const n=vf.shots;vfSave();
-  if(n){rerender();toast(`${n} Sucher-Foto${n>1?'s':''} gespeichert`);}}
+  rerender();if(n)toast(`${n} Sucher-Foto${n>1?'s':''} gespeichert`);}
 function vfSize(){const c=vf.canvas;if(!c)return false;const st=c.parentElement;const d=window.devicePixelRatio||1;const w=Math.round(st.clientWidth*d),h=Math.round(st.clientHeight*d);if(w&&h&&(c.width!==w||c.height!==h)){c.width=w;c.height=h;return true;}return false;}
 function vfWarn(t){const w=$('#vfWarn');if(!w)return;w.textContent=t||'';w.hidden=!t;}
 function vfLoop(){if(!vf.on)return;vfSize();const v=vf.video,c=vf.canvas,ctx=c.getContext('2d');const W=v.videoWidth,H=v.videoHeight;
@@ -720,11 +725,19 @@ function vfLoop(){if(!vf.on)return;vfSize();const v=vf.video,c=vf.canvas,ctx=c.g
     const hd=vfHeading();const info=vfLabel(g)+(hd!=null?` · ${deg(hd)}`:'');if(vf.lastInfo!==info){$('#vfInfo').textContent=info;vf.lastInfo=info;}
     const portrait=H>W&&(g.cw>g.ch);
     const warn=portrait?'iPhone quer halten (Ausrichtungssperre aus).':!g.cover?'Weiter als die iPhone-Kamera – Ränder fehlen. Ultra-Weitwinkel wählen (⚙), falls vorhanden.':g.res<700?`Starker Crop (${g.res}px) – Bild wird weich.`:'';
-    if(vf.lastWarn!==warn){vfWarn(warn);vf.lastWarn=warn;}}
+    if(!vf.camErr&&vf.lastWarn!==warn){vfWarn(warn);vf.lastWarn=warn;}
+    vfBlackCheck(ctx,r);}
+  else if(vf.stream&&vf.started&&Date.now()-vf.started>3000)vfCamProblem();
   vf.raf=requestAnimationFrame(vfLoop);}
+function vfBlackCheck(ctx,r){const now=Date.now();if(now-(vf.lastBC||0)<700)return;vf.lastBC=now;
+  let dark=true;try{const d=ctx.getImageData(Math.round(r.x+r.w*.3),Math.round(r.y+r.h*.3),Math.max(1,Math.round(r.w*.4)),Math.max(1,Math.round(r.h*.4))).data;
+    let s=0,n=0;for(let i=0;i<d.length;i+=64){s+=d[i]+d[i+1]+d[i+2];n++;}dark=n>0&&s/n<6;}catch{dark=false;}
+  if(dark){vf.blackSince=vf.blackSince||now;if(now-vf.blackSince>2500)vfCamProblem();}else{vf.blackSince=0;if(vf.camErr){vf.camErr=false;vf.lastWarn=null;vfWarn('');}}}
+function vfCamProblem(){if(vf.camErr)return;vf.camErr=true;try{vf.video.play();}catch{}
+  const w=$('#vfWarn');if(!w)return;w.hidden=false;w.innerHTML='Kamerabild bleibt schwarz.<button data-vf="restart">Neu starten</button>';}
 function vfScrollFocal(){const b=document.querySelector(`.vf-mm[aria-pressed="true"]`);if(b)try{b.scrollIntoView({inline:'center',block:'nearest'});}catch{}}
 function vfSetMm(m){vf.s.mm=+m;document.querySelectorAll('.vf-mm').forEach(b=>b.setAttribute('aria-pressed',b.dataset.mm==m));const i=$('#vfMm');if(i)i.value=m;vfSave();}
-async function vfShoot(){const v=vf.video;const W=v.videoWidth,H=v.videoHeight;if(!W)return;
+async function vfShoot(){const v=vf.video;const W=v.videoWidth,H=v.videoHeight;if(!W){toast('Kamera liefert noch kein Bild');vfCamProblem();return;}
   const g=vfGeom(W,H);const outW=Math.round(Math.min(2400,Math.max(1600,g.cw)));const outH=Math.round(outW*g.ch/g.cw);const bar=Math.round(outW*0.032);
   const c=document.createElement('canvas');c.width=outW;c.height=outH+bar;const ctx=c.getContext('2d');ctx.imageSmoothingQuality='high';
   drawCrop(ctx,v,W,H,g,0,0,outW,outH);drawLines(ctx,{x:0,y:0,w:outW,h:outH},Math.max(2,outW/900));
@@ -736,7 +749,7 @@ async function vfShoot(){const v=vf.video;const W=v.videoWidth,H=v.videoHeight;i
   const f=$('#vfFlash');if(f){f.hidden=false;setTimeout(()=>f.hidden=true,120);}
   const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.86));if(!blob){toast('Foto fehlgeschlagen');return;}
   const ph={id:uid(),setupId:item.id,scene:vf.sceneId||'',buf:await blob.arrayBuffer(),type:'image/jpeg',caption:`${meta.mm}mm${meta.sq>1?' '+meta.sq+'x':''} · ${(ASPECTS.find(a=>a[0]==meta.ar)||[0,''])[1]}`,meta,created:Date.now()};
-  await idb('photos','readwrite',st=>st.put(ph));item.photoCount=(item.photoCount||0)+1;touch(item);vf.shots++;
+  ph.thumb=await makeThumb(blob);await idb('photos','readwrite',st=>st.put(ph));item.photoCount=(item.photoCount||0)+1;touch(item);vf.shots++;
   const u=URL.createObjectURL(blob);(vf.urls=vf.urls||[]).push({src:u,cap:ph.caption});const th=$('#vfThumb');if(th){th.style.backgroundImage=`url(${u})`;}
   const vc=$('#vfCount');if(vc)vc.textContent=vf.shots+' neu';}
 async function vfCompass(btn){
@@ -745,10 +758,12 @@ async function vfCompass(btn){
   window.addEventListener('deviceorientation',vf.onOri);btn.textContent='Kompass an';toast('Kompass aktiv – Blickrichtung wird ins Foto geschrieben (±10°)');}
 function vfClick(e){if(e.target.closest('#vfThumb')&&vf.urls&&vf.urls.length){vwOpen(vf.urls,vf.urls.length-1,null);return;}const mmb=e.target.closest('[data-mm]');if(mmb){vfSetMm(mmb.dataset.mm);return;}
   const b=e.target.closest('[data-vf]');if(!b)return;const a=b.dataset.vf;
+  if(a==='restart'){vf.camErr=false;vf.lastWarn=null;vfWarn('');vf.started=0;vfStart();return;}
   if(a==='close')vfClose();else if(a==='shoot')vfShoot().catch(err=>toast('Fehler: '+err.message));
   else if(a==='set')$('#vfSet').hidden=false;else if(a==='setclose')$('#vfSet').hidden=true;
   else if(a==='lines'){vf.s.lines=!vf.s.lines;b.textContent='Drittel-Linien: '+(vf.s.lines?'an':'aus');vfSave();}
-  else if(a==='compass')vfCompass(b);}
+  else if(a==='compass')vfCompass(b);
+  else if(a==='hires'){vf.s.hires=!vf.s.hires;b.textContent='4K-Kamerastream: '+(vf.s.hires?'an':'aus');vfSave();vfStart();}}
 function vfChange(e){const t=e.target;
   if(t.id==='vfScene'){vf.sceneId=t.value;vf.item.lastScene=t.value;touch(vf.item);return;}
   if(t.id==='vfSensor')vf.s.sensor=t.value;else if(t.id==='vfSq')vf.s.sq=+t.value;else if(t.id==='vfAr')vf.s.ar=+t.value;
@@ -762,7 +777,7 @@ function vfInput(e){const t=e.target;
 const phBlob=ph=>new Blob([ph.annBuf||ph.buf],{type:ph.annBuf?'image/jpeg':ph.type});
 const ED_COLORS=['#ff3b30','#ffcc00','#34c759','#0a84ff','#ffffff','#111111'];
 const ED_W={S:.004,M:.008,L:.015},ED_MW={S:.025,M:.05,L:.09};
-const ED_TOOLS=[['pen','✎','Stift'],['arrow','➚','Pfeil'],['rect','▭','Rahmen'],['ell','○','Kreis'],['text','T','Text'],['mask','▦','Maske']];
+const ED_TOOLS=[['pen','✎','Stift'],['area','▦','Fläche'],['arrow','➚','Pfeil'],['rect','▭','Rahmen'],['ell','○','Kreis'],['text','T','Text']];
 let ed=null;
 function loadImg(blob){return new Promise((res,rej)=>{const u=URL.createObjectURL(blob);const i=new Image();i.onload=()=>{res(i);setTimeout(()=>URL.revokeObjectURL(u),1000);};i.onerror=()=>rej(new Error('Bild nicht lesbar'));i.src=u;});}
 function edHTML(){return `<div id="ed" role="dialog" aria-label="Zeichnen">
@@ -771,15 +786,15 @@ function edHTML(){return `<div id="ed" role="dialog" aria-label="Zeichnen">
   <div class="ed-bar">
     <div class="ed-row">${ED_TOOLS.map(([k,i,l])=>`<button class="ed-tool" data-tool="${k}" aria-pressed="${ed.tool===k}">${i}<small>${l}</small></button>`).join('')}</div>
     <div class="ed-row" id="edRow2"></div>
-    <div class="ed-row"><button class="ed-tool" data-ed="undo">↶<small>Zurück</small></button><button class="ed-tool" data-ed="clear">⌫<small>Alles</small></button><button class="ed-tool" data-ed="maskvis">◐<small>Maske</small></button><button class="ed-tool" data-ed="inpaint">⇪<small>Inpaint</small></button><span class="ed-hint" id="edHint"></span></div>
+    <div class="ed-row"><button class="ed-tool" data-ed="undo">↶<small>Zurück</small></button><button class="ed-tool" data-ed="clear">⌫<small>Alles</small></button><span class="ed-hint" id="edHint"></span></div>
   </div></div>`;}
-function edRow2(){const r=$('#edRow2');if(!r)return;const isMask=ed.tool==='mask';
+function edRow2(){const r=$('#edRow2');if(!r)return;const isMask=false;const isArea=ed.tool==='area';
   r.innerHTML=(isMask?'':ED_COLORS.map(c=>`<button class="ed-col" data-color="${c}" style="background:${c}" aria-label="Farbe" aria-pressed="${ed.color===c}"></button>`).join('')+'<span class="ed-sep"></span>')+
-  ['S','M','L'].map(w=>`<button class="ed-tool" data-w="${w}" aria-pressed="${ed.w===w}">${w}<small>${isMask?'Pinsel':'Linie'}</small></button>`).join('');
-  $('#edHint').textContent=isMask?'Rot = Bereich für Inpainting':ed.tool==='text'?'Tippen, wo Text hin soll':'';}
+  ['S','M','L'].map(w=>`<button class="ed-tool" data-w="${w}" aria-pressed="${ed.w===w}">${w}<small>${isArea?'Pinsel':'Linie'}</small></button>`).join('');
+  $('#edHint').textContent=isArea?'Fläche markieren – wird halbtransparent eingezeichnet':ed.tool==='text'?'Tippen, wo Text hin soll':'';}
 async function edOpen(pid){const ph=photoCache.get(pid);if(!ph){toast('Foto nicht gefunden');return;}
   let img;try{img=await loadImg(new Blob([ph.buf],{type:ph.type}));}catch(e){toast(e.message);return;}
-  ed={pid,ph,img,ann:clone(ph.ann||[]),mask:clone(ph.mask||[]),tool:'pen',color:ED_COLORS[0],w:'M',cur:null,showMask:true};
+  ed={pid,ph,img,ann:clone(ph.ann||[]).concat((ph.mask||[]).map(m=>({t:'area',c:'#ff3b30',w:m.w,pts:m.pts}))),mask:[],tool:'pen',color:ED_COLORS[0],w:'M',cur:null,showMask:true};
   document.body.insertAdjacentHTML('beforeend',edHTML());edRow2();
   ed.el=$('#ed');ed.c=$('#edC');
   ed.el.addEventListener('click',edClick);
@@ -789,7 +804,8 @@ async function edOpen(pid){const ph=photoCache.get(pid);if(!ph){toast('Foto nich
 function edClose(){if(!ed)return;window.removeEventListener('resize',ed.onR);ed.el.remove();ed=null;}
 function edRect(){const c=ed.c,d=window.devicePixelRatio||1;const W=Math.round(c.parentElement.clientWidth*d),H=Math.round(c.parentElement.clientHeight*d);
   if(c.width!==W||c.height!==H){c.width=W;c.height=H;}return fitRect(ed.img.naturalWidth,ed.img.naturalHeight,W,H);}
-function drawAnn(ctx,it,r){const X=v=>r.x+v*r.w,Y=v=>r.y+v*r.h;const lw=Math.max(1,it.w*r.w);
+function drawAnn(ctx,it,r){if(it.t==='area'){const o=document.createElement('canvas');o.width=ctx.canvas.width;o.height=ctx.canvas.height;drawAnn(o.getContext('2d'),Object.assign({},it,{t:'pen'}),r);ctx.save();ctx.globalAlpha=.42;ctx.drawImage(o,0,0);ctx.restore();return;}
+  const X=v=>r.x+v*r.w,Y=v=>r.y+v*r.h;const lw=Math.max(1,it.w*r.w);
   ctx.save();ctx.strokeStyle=ctx.fillStyle=it.c||'#ff3b30';ctx.lineWidth=lw;ctx.lineCap='round';ctx.lineJoin='round';
   if(it.t==='pen'||it.t==='mask'){const p=it.pts;if(!p||!p.length){ctx.restore();return;}ctx.beginPath();ctx.moveTo(X(p[0][0]),Y(p[0][1]));
     if(p.length===1)ctx.lineTo(X(p[0][0])+.01,Y(p[0][1]));for(let i=1;i<p.length;i++)ctx.lineTo(X(p[i][0]),Y(p[i][1]));ctx.stroke();}
@@ -804,43 +820,35 @@ function drawMask(ctx,mask,r,W,H,alpha){if(!mask.length)return;const o=document.
   mask.forEach(m=>drawAnn(oc,Object.assign({},m,{c:'#ff2d2d'}),r));ctx.save();ctx.globalAlpha=alpha;ctx.drawImage(o,0,0);ctx.restore();}
 function edDraw(){if(!ed)return;const r=edRect();const ctx=ed.c.getContext('2d');ctx.fillStyle='#000';ctx.fillRect(0,0,ed.c.width,ed.c.height);
   ctx.drawImage(ed.img,r.x,r.y,r.w,r.h);ed.r=r;
-  if(ed.showMask)drawMask(ctx,ed.mask.concat(ed.cur&&ed.cur.t==='mask'?[ed.cur]:[]),r,ed.c.width,ed.c.height,.45);
-  ed.ann.forEach(it=>drawAnn(ctx,it,r));if(ed.cur&&ed.cur.t!=='mask')drawAnn(ctx,ed.cur,r);}
+  ed.ann.forEach(it=>drawAnn(ctx,it,r));if(ed.cur)drawAnn(ctx,ed.cur,r);}
 function edPt(e){const b=ed.c.getBoundingClientRect(),d=ed.c.width/b.width;const r=ed.r;return [Math.min(1,Math.max(0,((e.clientX-b.left)*d-r.x)/r.w)),Math.min(1,Math.max(0,((e.clientY-b.top)*d-r.y)/r.h))];}
 function edDown(e){if(!ed||!e.isPrimary)return;e.preventDefault();const p=edPt(e);
   if(ed.tool==='text'){const s=window.prompt('Text');if(s&&s.trim()){ed.ann.push({t:'text',c:ed.color,size:{S:.03,M:.045,L:.07}[ed.w],x:p[0],y:p[1],s:s.trim()});edDraw();}return;}
   try{ed.c.setPointerCapture(e.pointerId);}catch{}
   if(ed.tool==='pen')ed.cur={t:'pen',c:ed.color,w:ED_W[ed.w],pts:[p]};
-  else if(ed.tool==='mask')ed.cur={t:'mask',w:ED_MW[ed.w],pts:[p]};
+  else if(ed.tool==='area')ed.cur={t:'area',c:ed.color,w:ED_MW[ed.w],pts:[p]};
   else ed.cur={t:ed.tool,c:ed.color,w:ED_W[ed.w],a:p,b:p};edDraw();}
 function edMove(e){if(!ed||!ed.cur)return;e.preventDefault();const p=edPt(e);if(ed.cur.pts)ed.cur.pts.push(p);else ed.cur.b=p;edDraw();}
 function edUp(){if(!ed||!ed.cur)return;const c=ed.cur;ed.cur=null;
-  if(c.pts){(c.t==='mask'?ed.mask:ed.ann).push(Object.assign(c,{pts:c.pts.filter((q,i)=>i%1===0).map(q=>[+q[0].toFixed(4),+q[1].toFixed(4)])}));}
+  if(c.pts){ed.ann.push(Object.assign(c,{pts:c.pts.filter((q,i)=>i%1===0).map(q=>[+q[0].toFixed(4),+q[1].toFixed(4)])}));}
   else if(Math.hypot(c.b[0]-c.a[0],c.b[1]-c.a[1])>.01)ed.ann.push(c);edDraw();}
 async function edRender(withMaskOnly){const W=ed.img.naturalWidth,H=ed.img.naturalHeight;const c=document.createElement('canvas');c.width=W;c.height=H;const ctx=c.getContext('2d');const r={x:0,y:0,w:W,h:H};
   if(withMaskOnly){ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);ed.mask.forEach(m=>drawAnn(ctx,Object.assign({},m,{c:'#ffffff'}),r));return new Promise(res=>c.toBlob(res,'image/png'));}
   ctx.drawImage(ed.img,0,0);ed.ann.forEach(it=>drawAnn(ctx,it,r));return new Promise(res=>c.toBlob(res,'image/jpeg',.88));}
-async function edSave(){const ph=ed.ph;ph.ann=ed.ann;ph.mask=ed.mask;
+async function edSave(){const ph=ed.ph;ph.ann=ed.ann;ph.mask=[];
   if(ed.ann.length){const b=await edRender(false);ph.annBuf=b?await b.arrayBuffer():null;}else ph.annBuf=null;
-  await idb('photos','readwrite',st=>st.put(ph));
+  ph.thumb=await makeThumb(phBlob(ph));await idb('photos','readwrite',st=>st.put(ph));
   const x=vw.list.find(q=>q.pid===ph.id);if(x){const u=URL.createObjectURL(phBlob(ph));objURLs.push(u);x.src=u;const sl=$('#vwTrack').children[vw.list.indexOf(x)];if(sl){const im=sl.querySelector('img');if(im)im.src=u;}}
   vw.dirty=true;edClose();toast('Gespeichert – Original bleibt erhalten');}
-async function edInpaint(){if(!ed.mask.length){toast('Erst mit ▦ Maske den Bereich übermalen');return;}
-  const mask=await edRender(true);const base=`${slug(ed.ph.caption||'foto')}_${ed.ph.id.slice(0,6)}`;
-  const img=new File([ed.ph.buf],`${base}_image.jpg`,{type:'image/jpeg'}),m=new File([mask],`${base}_mask.png`,{type:'image/png'});
-  const files=[img,m];
-  $('#sheetMsg').textContent=`Inpaint-Paket: ${img.name} + ${m.name} (weiß = neu generieren). In ComfyUI: Load Image + Load Image (as Mask).`;$('#sheet').hidden=false;
-  $('#sheetGo').onclick=async()=>{try{if(navigator.canShare&&navigator.canShare({files})){await navigator.share({files});$('#sheet').hidden=true;}else{files.forEach(download);$('#sheet').hidden=true;}}catch(e){if(e.name!=='AbortError')toast('Teilen: '+e.message);}};}
 function edClick(e){const t=e.target.closest('[data-tool],[data-color],[data-w],[data-ed]');if(!t)return;
-  if(t.dataset.tool){ed.tool=t.dataset.tool;document.querySelectorAll('#ed [data-tool]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.tool===ed.tool));if(ed.tool==='mask')ed.showMask=true;edRow2();edDraw();return;}
+  if(t.dataset.tool){ed.tool=t.dataset.tool;document.querySelectorAll('#ed [data-tool]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.tool===ed.tool));edRow2();edDraw();return;}
   if(t.dataset.color){ed.color=t.dataset.color;edRow2();return;}
   if(t.dataset.w){ed.w=t.dataset.w;edRow2();return;}
   const a=t.dataset.ed;
   if(a==='cancel')edClose();else if(a==='save')edSave().catch(err=>toast('Fehler: '+err.message));
-  else if(a==='undo'){if(ed.tool==='mask'&&ed.mask.length)ed.mask.pop();else if(ed.ann.length)ed.ann.pop();else ed.mask.pop();edDraw();}
+  else if(a==='undo'){ed.ann.pop();edDraw();}
   else if(a==='clear'){if(!t.dataset.armed){t.dataset.armed='1';t.classList.add('armed');setTimeout(()=>{delete t.dataset.armed;t.classList.remove('armed');},3000);return;}ed.ann=[];ed.mask=[];edDraw();delete t.dataset.armed;t.classList.remove('armed');}
-  else if(a==='maskvis'){ed.showMask=!ed.showMask;edDraw();}
-  else if(a==='inpaint')edInpaint();}
+}
 
 /* ---------- Report ---------- */
 function vReport(cur){
@@ -1013,7 +1021,7 @@ function deliver(name,content,type,onDone){let file=new File([content],name,{typ
     if(r==='ok'){$('#sheet').hidden=true;onDone&&onDone();}
     else if(r.startsWith('err:'))toast('Teilen fehlgeschlagen: '+r.slice(4));};}
 $('#sheetX').onclick=()=>$('#sheet').hidden=true;
-let vw={list:[]};
+let vw={list:[],urls:[]};
 function vwOpen(list,idx,item){vw.list=list;vw.item=item||null;vw.dirty=false;vw.pi=-1;const tr=$('#vwTrack');
   tr.innerHTML=list.map((x,i)=>`<div class="vw-slide"><img src="${x.src}" alt="${esc(x.cap||'Foto '+(i+1))}"${Math.abs(i-idx)>2?' loading="lazy"':''}></div>`).join('');
   $('#viewer').hidden=false;document.body.classList.add('vf-open');
@@ -1026,7 +1034,7 @@ function vwPanel(){const bot=$('#vwBot');const x=vw.list[vw.i];if(!x||!x.pid||!v
 $('#vwBot').addEventListener('click',async e=>{if(e.target.closest('[data-vwdraw]')){const x=vw.list[vw.i];if(x&&x.pid)edOpen(x.pid);return;}const b=e.target.closest('[data-vwscene]');if(!b)return;const x=vw.list[vw.i];if(!x)return;
   await setPhotoScene([x.pid],b.dataset.vwscene);vw.dirty=true;vwPanel();});
 $('#vwBot').addEventListener('input',e=>{if(e.target.id!=='vwCapIn')return;const x=vw.list[vw.i];if(!x)return;x.cap=e.target.value;$('#vwCap').textContent=x.cap;saveCaption(x.pid,x.cap);vw.dirty=true;});
-function vwClose(){$('#viewer').hidden=true;$('#vwTrack').innerHTML='';$('#vwBot').hidden=true;if(!vf.on)document.body.classList.remove('vf-open');if(vw.dirty&&vw.item&&!vf.on)setTimeout(()=>fillPhotos(vw.item),450);vw.dirty=false;}
+function vwClose(){$('#viewer').hidden=true;$('#vwTrack').innerHTML='';vw.urls.forEach(u=>URL.revokeObjectURL(u));vw.urls=[];$('#vwBot').hidden=true;if(!vf.on)document.body.classList.remove('vf-open');if(vw.dirty&&vw.item&&!vf.on)setTimeout(()=>fillPhotos(vw.item),450);vw.dirty=false;}
 $('#vwTrack').addEventListener('scroll',()=>{cancelAnimationFrame(vw.raf);vw.raf=requestAnimationFrame(vwUpd);},{passive:true});
 $('#vwClose').onclick=vwClose;
 window.addEventListener('resize',()=>{if(!$('#viewer').hidden){const tr=$('#vwTrack');setTimeout(()=>{tr.scrollLeft=(vw.i||0)*tr.clientWidth;},200);}});
@@ -1067,7 +1075,7 @@ app.addEventListener('click',async e=>{
       const d={id:uid(),type:'day',parent:p.id,created:Date.now(),date:today(),dt:String(dt),location:ds.length?ds[ds.length-1].location||'':'',weather:[],notes:''};await putNow(d);go('day',d.id);break;}
     case 'newLoc':{const p=S.get(b.dataset.id);const l={id:uid(),type:'loc',parent:p.id,created:Date.now(),kind:'Tech Recce',name:'Neue Location',date:today(),time:nowHM(),address:'',contact:'',gps:'',flags:[],access:'',power:'',sound:'',light:'',vfx:'',notes:'',memos:[],photoCount:0};await putNow(l);go('loc',l.id);setTimeout(()=>{const f=$('#f_name');f&&f.select();},50);break;}
     case 'thumb':{const pid=b.dataset.pid;if(photoUI.sel){photoUI.sel.has(pid)?photoUI.sel.delete(pid):photoUI.sel.add(pid);fillPhotos(it);break;}
-      const idx=photoUI.order.findIndex(x=>x.pid===pid);vwOpen(photoUI.order.map(x=>({...x})),Math.max(0,idx),it);break;}
+      const idx=photoUI.order.findIndex(x=>x.pid===pid);vwOpen(photoUI.order.map(x=>{const ph=photoCache.get(x.pid);const u=URL.createObjectURL(phBlob(ph));vw.urls.push(u);return {...x,src:u};}),Math.max(0,idx),it);break;}
     case 'phFilter':{photoUI.filter[it.id]=b.dataset.val;fillPhotos(it);break;}
     case 'selMode':{photoUI.sel=photoUI.sel?null:new Set();fillPhotos(it);break;}
     case 'assignSel':{if(!photoUI.sel||!photoUI.sel.size){toast('Erst Fotos antippen');break;}const n=await setPhotoScene([...photoUI.sel],b.dataset.val);const sc=scenesOf(it).find(x=>x.id===b.dataset.val);photoUI.sel=null;await fillPhotos(it);toast(`${n} Foto${n>1?'s':''} → ${sceneLabel(sc)}`);break;}
