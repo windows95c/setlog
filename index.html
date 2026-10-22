@@ -80,12 +80,29 @@ textarea{resize:vertical}
 .x{width:40px;height:40px;border-radius:20px;border:none;background:transparent;color:var(--muted);font-size:22px;cursor:pointer;flex:none}
 .x.armed{width:auto;padding:0 10px;font-size:13px;border-radius:8px}
 .cam-h{display:flex;align-items:center;gap:8px;margin:0;font-size:15px}
-.photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
-.photos:empty{display:none}
-.ph{margin:0;position:relative;display:flex;flex-direction:column;gap:4px;min-width:0}
-.ph img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;background:var(--surface2);cursor:zoom-in}
-.ph .x{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.55);color:#fff;width:34px;height:34px;font-size:18px}
-.ph input{font-size:14px;padding:6px 8px}
+.ph-wrap{display:flex;flex-direction:column;gap:10px}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:4px}
+.th{position:relative;padding:0;border:none;background:var(--surface2);border-radius:6px;overflow:hidden;aspect-ratio:4/3;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.th img{width:100%;height:100%;object-fit:cover;display:block}
+.th-mm{position:absolute;left:3px;bottom:3px;background:rgba(0,0,0,.6);color:#f0b23a;font-size:10px;padding:1px 4px;border-radius:4px}
+.th.sel{outline:3px solid var(--accent);outline-offset:-3px}
+.th.sel::after{content:"✓";position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:11px;background:var(--accent);color:var(--accent-fg);font-size:14px;line-height:22px;text-align:center;font-weight:700}
+.ph-h{margin:4px 0 0;font-size:13px;font-weight:650;display:flex;gap:6px;align-items:baseline}
+.ph-h .mono{color:var(--muted);font-weight:400}
+.chips.small .chip{min-height:34px;font-size:13px;padding:0 10px}
+.selbar{position:sticky;top:calc(env(safe-area-inset-top,0px) + 62px);z-index:5;background:var(--surface);border:1px solid var(--accent);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.actbar{position:fixed;left:0;right:0;bottom:0;z-index:25;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;background:var(--bar);border-top:1px solid var(--line);
+  padding:8px max(12px,env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px))}
+.ab{font:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:56px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font-size:20px;cursor:pointer;-webkit-tap-highlight-color:transparent;position:relative}
+.ab span{font-size:12px;font-weight:600}
+.ab.main{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.ab.rec{background:var(--rec);color:#fff;border-color:var(--rec);font-size:14px;font-weight:700}
+.actbar-space{height:84px}
+.scn{display:grid;grid-template-columns:72px 1fr 40px;gap:6px;align-items:center}
+details.card>summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px}
+details.card>summary::-webkit-details-marker{display:none}
+details.card>summary::after{content:"▾";color:var(--muted)}
+details.card[open]>summary::after{content:"▴"}
 .memo{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-bottom:1px solid var(--line)}
 .memo:last-of-type{border-bottom:none}
 .memo-h{display:flex;align-items:center;gap:8px}
@@ -103,7 +120,7 @@ details summary{cursor:pointer;padding:6px 0}
 .danger{display:flex;justify-content:center}
 .install{border-color:var(--accent)}
 pre.box{margin:0;max-height:220px;overflow:auto;background:var(--surface2);border-radius:8px;padding:10px;font:12px/1.4 var(--mono);white-space:pre-wrap;word-break:break-word}
-#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;z-index:50;max-width:calc(100% - 32px);text-align:center}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(96px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;z-index:50;max-width:calc(100% - 32px);text-align:center}
 #sheet,#viewer{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center}
 .sheet-in{background:var(--surface);width:100%;max-width:520px;border-radius:16px 16px 0 0;padding:18px max(16px,env(safe-area-inset-right,0px)) calc(18px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:10px}
 #viewer{background:#000;flex-direction:column;align-items:stretch;justify-content:flex-start;z-index:70;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
@@ -113,6 +130,12 @@ pre.box{margin:0;max-height:220px;overflow:auto;background:var(--surface2);borde
 .vw-x{flex:none;width:44px;height:44px;border-radius:22px;border:1px solid #333;background:#1d2024;color:#eee;font-size:18px;cursor:pointer}
 #vwTrack{flex:1;min-height:0;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;overscroll-behavior:contain}
 #vwTrack::-webkit-scrollbar{display:none}
+.vw-bot{flex:none;display:flex;flex-direction:column;gap:8px;padding:8px 10px 10px;background:#111;border-top:1px solid #2a2a2a}
+.vw-chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.vw-chips::-webkit-scrollbar{display:none}
+.vw-chips .chip{flex:none;background:#1d2024;color:#ddd;border-color:#333}
+.vw-chips .chip[aria-pressed="true"]{background:#f0b23a;color:#111;border-color:#f0b23a}
+.vw-bot input{background:#1d2024;color:#eee;border:1px solid #333;font-size:16px;border-radius:8px;padding:9px 10px;width:100%}
 .vw-slide{flex:0 0 100%;width:100%;height:100%;scroll-snap-align:center;scroll-snap-stop:always;display:flex;align-items:center;justify-content:center}
 .vw-slide img{max-width:100%;max-height:100%;object-fit:contain;display:block}
 /* Report: deliberately paper-white in both themes */
@@ -200,7 +223,7 @@ body.vf-open{overflow:hidden}
 <main id="app"></main>
 <div id="toast" role="status" hidden></div>
 <div id="sheet" hidden><div class="sheet-in"><p id="sheetMsg" class="hint"></p><button class="btn primary block" id="sheetGo">Teilen …</button><p class="hint">Im Teilen-Menü: <b>In Dateien sichern</b> – oder direkt an die Claude-App senden.</p><button class="btn block" id="sheetX">Schließen</button></div></div>
-<div id="viewer" hidden role="dialog" aria-label="Fotos"><div class="vw-top"><span id="vwCount" class="mono"></span><span id="vwCap"></span><button id="vwClose" class="vw-x" aria-label="Schließen">✕</button></div><div id="vwTrack"></div></div>
+<div id="viewer" hidden role="dialog" aria-label="Fotos"><div class="vw-top"><span id="vwCount" class="mono"></span><span id="vwCap"></span><button id="vwClose" class="vw-x" aria-label="Schließen">✕</button></div><div id="vwTrack"></div><div id="vwBot" class="vw-bot" hidden></div></div>
 <script>
 window.__fatal=function(m){try{var a=document.getElementById('app');if(!a)return;var d=document.createElement('div');d.className='empty';d.style.textAlign='left';d.style.color='var(--warn)';d.textContent='Fehler: '+m;a.appendChild(d);var s=document.getElementById('sub');if(s)s.textContent='Startfehler – Screenshot an Claude';}catch(e){}};
 window.addEventListener('error',function(e){window.__fatal((e.message||'Unbekannt')+(e.lineno?' (Zeile '+e.lineno+')':''));});
@@ -208,7 +231,7 @@ window.addEventListener('unhandledrejection',function(e){var r=e.reason;window._
 </script>
 <script>
 'use strict';
-const APP_VERSION='1.2.1';
+const APP_VERSION='1.3.0';
 const $=s=>document.querySelector(s);
 const app=$('#app');
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -286,8 +309,8 @@ const datalists=p=>`<datalist id="dl-cam">${opts(lines(p.camPresets))}</datalist
 
 /* ---------- Navigation ---------- */
 let nav=[{v:'home'}];
-function go(v,id){flush();nav.push({v,id});render();window.scrollTo(0,0);}
-function back(){flush();stopRec();if(nav.length>1){nav.pop();render();window.scrollTo(0,0);}}
+function go(v,id){flush();photoUI.sel=null;nav.push({v,id});render();window.scrollTo(0,0);}
+function back(){flush();stopRec();photoUI.sel=null;if(nav.length>1){nav.pop();render();window.scrollTo(0,0);}}
 $('#backBtn').addEventListener('click',back);
 function rerender(){const y=window.scrollY;render();window.scrollTo(0,y);}
 let objURLs=[];
@@ -331,6 +354,10 @@ function vProject(cur){
     ${F('VFX Supervisor','sup',p.sup,{cap:'words'})}${F('Regie','director',p.director,{cap:'words'})}
     ${F('DOP','dop',p.dop,{cap:'words'})}${F('Projekt-FPS','fps',p.fps,{mode:'decimal',list:'dl-fps'})}
   </div><datalist id="dl-fps">${opts(DL.fps)}</datalist></section>
+  <section class="card" data-item="${p.id}"><div class="sec-row"><h2 class="sec">Szenen</h2><span class="meta mono">${(p.scenes||[]).length}</span></div>
+    <p class="hint">Einmal anlegen – Fotos und Sucher-Bilder ordnest du dann per Antippen zu.</p>
+    ${(p.scenes||[]).map((sc,i)=>`<div class="scn">${F('',`scenes.${i}.n`,sc.n,{ph:'Nr.',cls:'mono-in',cap:'characters'})}${F('',`scenes.${i}.name`,sc.name,{ph:'Beschreibung, z. B. Strandlauf'})}<button type="button" class="x" data-act="delScene" data-i="${i}" data-confirm aria-label="Szene löschen">×</button></div>`).join('')}
+    <button class="btn block" data-act="addScene">+ Szene</button></section>
   <section class="stack"><div class="sec-row"><h2 class="sec">Tech Recce &amp; Locations</h2><span class="meta mono">${locsOf(p).length}</span></div>
     ${locsOf(p).map(locRow).join('')||empty('Noch keine Location. Für Recce und Scouting: Fotos mit Objektiv-Simulation, Sonnenstand, Check-Liste.')}
     <button class="btn block" data-act="newLoc" data-id="${p.id}">+ Location / Recce</button></section>
@@ -384,9 +411,9 @@ function vSetup(cur){
     <button class="btn primary block" data-act="addTake">+ Take ${nextTake}</button></div></section>
 
   <section class="card" data-item="${s.id}"><div class="sec-row"><h2 class="sec">Memos</h2><span class="meta mono">${(s.memos||[]).length}</span></div>
-    <p class="hint">Text per Diktiertaste der Tastatur (geht offline). Aufnahme speichert zusätzlich Audio auf dem iPhone.</p>
+    <p class="hint">Sprachmemo über ● unten oder 🎙 am Take. Claude transkribiert und sortiert später ein.</p>
     <div id="memos">${(s.memos||[]).map(memoRow).join('')}</div>
-    <div class="btns"><button class="btn" data-act="addMemo">+ Text-Memo</button><button class="btn" id="recBtn" data-act="rec">● Aufnahme</button></div></section>
+    <button class="btn" data-act="addMemo">+ Text-Memo</button></section>
 
   <section class="stack"><h2 class="sec">Kamera</h2>
     ${(s.cams||[]).map((c,i)=>camCard(s,c,i)).join('')}
@@ -397,13 +424,13 @@ function vSetup(cur){
     ${F('Notiz zu Referenzen','refsNote',s.refsNote,{type:'textarea',rows:2,ph:'z. B. HDRI 7 Belichtungen, Chart Anfang Take 2'})}</section>
 
   <section class="card" data-item="${s.id}"><div class="sec-row"><h2 class="sec">Fotos</h2><span class="meta mono" id="phCount">${s.photoCount||0}</span></div>
-    <div id="photos" class="photos"></div>
-    <button class="btn block" data-act="finder" data-id="${s.id}">◫ Sucher – Objektiv simulieren</button>
-    <div class="btns"><label class="btn">Foto aufnehmen<input class="vh" type="file" accept="image/*" capture="environment" data-file="photo"></label><label class="btn">Aus Mediathek<input class="vh" type="file" accept="image/*" multiple data-file="photo"></label></div></section>
+    <div id="photos" class="ph-wrap"></div>
+    <label class="btn">Aus Mediathek hinzufügen<input class="vh" type="file" accept="image/*" multiple data-file="photo"></label></section>
 
   <section class="card" data-item="${s.id}"><h2 class="sec">Notizen</h2>${F('','notes',s.notes,{type:'textarea',rows:4,ph:'Alles, was Comp später wissen muss'})}</section>
 
-  <div class="btns"><button class="btn" data-act="dupSetup" data-id="${s.id}">Setup duplizieren</button><button class="btn ghost-danger" data-act="del" data-id="${s.id}">Setup löschen</button></div>`,
+  <div class="btns"><button class="btn" data-act="dupSetup" data-id="${s.id}">Setup duplizieren</button><button class="btn ghost-danger" data-act="del" data-id="${s.id}">Setup löschen</button></div>
+  ${actBar(s)}`,
   after:()=>{fillPhotos(s);fillAudio(s);}};
 }
 function takeRow(tk,i){return `<div class="take ${tk.circled?'circ':''}">
@@ -432,12 +459,29 @@ function camCard(s,c,i){const k=f=>`cams.${i}.${f}`;
 
 /* ---------- Photos ---------- */
 let photoCache=new Map();
+const photoUI={filter:{},sel:null,order:[]};
+function scenesOf(it){const p=it&&projectOf(it);return ((p&&p.scenes)||[]).filter(s=>s&&(s.n||s.name));}
+function sceneLabel(sc){return sc?`Sz ${sc.n||'?'}${sc.name?' · '+sc.name:''}`:'Ohne Szene';}
+function curItem(){const c=nav[nav.length-1];return c&&S.get(c.id);}
 async function fillPhotos(s){const box=$('#photos');if(!box)return;
   const list=await getPhotos(s.id);photoCache=new Map(list.map(p=>[p.id,p]));
-  box.innerHTML=list.map(ph=>{const u=URL.createObjectURL(new Blob([ph.buf],{type:ph.type}));objURLs.push(u);
-    return `<figure class="ph"><img src="${u}" alt="${esc(ph.caption||'Set-Foto')}" data-view="${u}"><input data-cap="${ph.id}" value="${esc(ph.caption)}" placeholder="Beschriftung" autocomplete="off"><button type="button" class="x" data-act="delPhoto" data-pid="${ph.id}" data-confirm aria-label="Foto löschen">×</button></figure>`;}).join('');
+  const scs=scenesOf(s);const valid=new Set(scs.map(x=>x.id));const sceneOf=ph=>valid.has(ph.scene)?ph.scene:'';
+  let f=photoUI.filter[s.id]||'all';if(f!=='all'&&f!=='none'&&!valid.has(f))f='all';
+  const urls=new Map(list.map(ph=>{const u=URL.createObjectURL(new Blob([ph.buf],{type:ph.type}));objURLs.push(u);return [ph.id,u];}));
+  let groups;
+  if(f==='all'&&scs.length)groups=[...scs.map(sc=>({sc,items:list.filter(ph=>sceneOf(ph)===sc.id)})),{sc:null,items:list.filter(ph=>!sceneOf(ph))}].filter(g=>g.items.length);
+  else groups=[{sc:undefined,items:f==='all'?list:list.filter(ph=>f==='none'?!sceneOf(ph):sceneOf(ph)===f)}];
+  const sel=photoUI.sel;
+  const thumb=ph=>`<button type="button" class="th${sel&&sel.has(ph.id)?' sel':''}" data-act="thumb" data-pid="${ph.id}" aria-label="${esc(ph.caption||'Foto')}"><img src="${urls.get(ph.id)}" alt="" loading="lazy">${ph.meta&&ph.meta.mm?`<span class="th-mm mono">${ph.meta.mm}</span>`:''}</button>`;
+  const fchips=scs.length&&list.length?`<div class="chips small">${[['all','Alle',list.length],...scs.map(sc=>[sc.id,'Sz '+(sc.n||'?'),list.filter(x=>sceneOf(x)===sc.id).length]),['none','Ohne',list.filter(x=>!sceneOf(x)).length]].map(([k,lb,n])=>`<button type="button" class="chip" data-act="phFilter" data-val="${k}" aria-pressed="${f===k}">${esc(lb)} <span class="mono">${n}</span></button>`).join('')}</div>`:'';
+  const selbar=sel?`<div class="selbar"><strong class="mono">${sel.size} ausgewählt</strong>${scs.length?`<div class="chips small">${scs.map(sc=>`<button type="button" class="chip" data-act="assignSel" data-val="${sc.id}">→ Sz ${esc(sc.n||'?')}</button>`).join('')}<button type="button" class="chip" data-act="assignSel" data-val="">→ Ohne</button></div>`:'<p class="hint">Im Projekt Szenen anlegen, dann hier zuordnen.</p>'}<div class="btns"><button class="btn ghost-danger" data-act="delSel" data-confirm>Löschen</button><button class="btn primary" data-act="selMode">Fertig</button></div></div>`:'';
+  box.innerHTML=list.length?`${fchips}${selbar}${groups.map(g=>`${g.sc!==undefined?`<h3 class="ph-h">${esc(sceneLabel(g.sc))} <span class="mono">${g.items.length}</span></h3>`:''}<div class="thumbs">${g.items.map(thumb).join('')}</div>`).join('')||'<p class="hint">Keine Fotos in diesem Filter.</p>'}${sel?'':`<button type="button" class="btn" data-act="selMode">Mehrere auswählen</button>`}`
+    :'<p class="hint">Noch keine Fotos – unten <b>Sucher</b> oder <b>Foto</b>.</p>';
+  photoUI.order=groups.flatMap(g=>g.items).map(ph=>({src:urls.get(ph.id),cap:ph.caption,pid:ph.id}));
   if(s.photoCount!==list.length){s.photoCount=list.length;touch(s);}
   const c=$('#phCount');if(c)c.textContent=list.length;}
+async function setPhotoScene(ids,scene){const list=ids.map(id=>photoCache.get(id)).filter(Boolean);list.forEach(ph=>ph.scene=scene||'');
+  await idb('photos','readwrite',st=>{list.forEach(ph=>st.put(ph));});return list.length;}
 async function shrink(file){const url=URL.createObjectURL(file);
   try{const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error('Bild nicht lesbar'));i.src=url;});
     const max=1800;const k=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
@@ -447,8 +491,8 @@ async function shrink(file){const url=URL.createObjectURL(file);
     return {buf:await blob.arrayBuffer(),type:'image/jpeg'};}
   catch(e){return {buf:await file.arrayBuffer(),type:file.type||'image/jpeg'};}
   finally{URL.revokeObjectURL(url);}}
-async function addPhotos(s,files){if(!files.length)return;toast(files.length>1?`${files.length} Fotos werden gespeichert…`:'Foto wird gespeichert…');
-  for(const f of files){const {buf,type}=await shrink(f);const ph={id:uid(),setupId:s.id,buf,type,caption:'',created:Date.now()};await idb('photos','readwrite',st=>st.put(ph));}
+async function addPhotos(s,files){if(!files.length)return;const fl=photoUI.filter[s.id];const scene=fl&&fl!=='all'&&fl!=='none'?fl:'';toast(files.length>1?`${files.length} Fotos werden gespeichert…`:'Foto wird gespeichert…');
+  for(const f of files){const {buf,type}=await shrink(f);const ph={id:uid(),setupId:s.id,buf,type,caption:'',scene,created:Date.now()};await idb('photos','readwrite',st=>st.put(ph));}
   await fillPhotos(s);toast('Gespeichert');}
 let capT;
 function saveCaption(id,val){const ph=photoCache.get(id);if(!ph)return;ph.caption=val;clearTimeout(capT);capT=setTimeout(()=>idb('photos','readwrite',st=>st.put(ph)).catch(e=>toast('Fehler: '+e.message)),400);}
@@ -479,48 +523,55 @@ function stopRec(){if(rec){try{rec.mr.stop()}catch{}}}
 
 /* ---------- Locations / Tech Recce ---------- */
 const LOC_FLAGS=['Strom vor Ort','Parken','Basecamp-Fläche','WC','Genehmigung nötig','Drohne erlaubt','Lärm / Verkehr','Handynetz','Greenscreen möglich','Rigging möglich','Sonne geprüft','Wetterschutz'];
-const LOC_KINDS=['Tech Recce','Location Scout'];
+const LOC_KINDS=['Tech Recce','Location Scout','Director Scout'];
+const KIND_BADGE={'Tech Recce':'RECCE','Location Scout':'SCOUT','Director Scout':'DIR'};
 const locsOf=p=>kids(p.id,'loc');
 function locRow(l){const m=(l.memos||[]).filter(x=>!x.done&&x.text.trim()).length;
   const info=[l.photoCount?`${l.photoCount} Foto`:'',m?`${m} Memo`:''].filter(Boolean).join(' · ')||'—';
-  return `<button class="row" data-act="open" data-v="loc" data-id="${l.id}"><span class="badge mono">${esc(l.kind==='Location Scout'?'SCOUT':'RECCE')}</span><div class="row-main"><strong>${esc(l.name||'Ohne Namen')}</strong><span class="meta">${esc([l.date&&fmtDate(l.date),l.address&&l.address.split('\n')[0]].filter(Boolean).join(' · ')||'—')}</span></div><span class="count mono">${info}</span></button>`;}
+  return `<button class="row" data-act="open" data-v="loc" data-id="${l.id}"><span class="badge mono">${esc(KIND_BADGE[l.kind]||'RECCE')}</span><div class="row-main"><strong>${esc(l.name||'Ohne Namen')}</strong><span class="meta">${esc([l.date&&fmtDate(l.date),l.address&&l.address.split('\n')[0]].filter(Boolean).join(' · ')||'—')}</span></div><span class="count mono">${info}</span></button>`;}
 function parseGPS(s){const m=String(s||'').replace(/,/g,' ').match(/(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)/);if(!m)return null;const lat=+m[1],lon=+m[2];return Math.abs(lat)<=90&&Math.abs(lon)<=180?{lat,lon}:null;}
+function actBar(it){return `<div class="actbar-space"></div><div class="actbar" data-item="${it.id}">
+  <button type="button" class="ab main" data-act="finder" data-id="${it.id}">◫<span>Sucher</span></button>
+  <label class="ab">📷<span>Foto</span><input class="vh" type="file" accept="image/*" capture="environment" data-file="photo"></label>
+  <button type="button" class="ab" id="recBtn" data-act="rec">●<span>Sprachmemo</span></button></div>`;}
 function vLoc(cur){
-  const l=S.get(cur.id),p=S.get(l.parent);const g=parseGPS(l.gps);
+  const l=S.get(cur.id),p=S.get(l.parent);const g=parseGPS(l.gps);const memos=l.memos||[];
   return {title:l.name||'Location',sub:`${l.kind||'Tech Recce'} · ${p.name}`,html:`
   <section class="card" data-item="${l.id}">
-    <div class="chips">${LOC_KINDS.map(k=>`<button type="button" class="chip" data-act="setKind" data-val="${k}" aria-pressed="${(l.kind||'Tech Recce')===k}">${k}</button>`).join('')}</div>
+    <div class="chips small">${LOC_KINDS.map(k=>`<button type="button" class="chip" data-act="setKind" data-val="${k}" aria-pressed="${(l.kind||'Tech Recce')===k}">${k}</button>`).join('')}</div>
+    <div class="grid">${F('Location / Motiv','name',l.name,{cls:'span2'})}${F('Datum','date',l.date,{type:'date'})}${F('Uhrzeit','time',l.time,{type:'time'})}</div></section>
+
+  <section class="card" data-item="${l.id}"><div class="sec-row"><h2 class="sec">Fotos</h2><span class="meta mono" id="phCount">${l.photoCount||0}</span></div>
+    <div id="photos" class="ph-wrap"></div>
+    <label class="btn">Aus Mediathek hinzufügen<input class="vh" type="file" accept="image/*" multiple data-file="photo"></label></section>
+
+  <section class="card" data-item="${l.id}"><div class="sec-row"><h2 class="sec">Memos</h2><span class="meta mono">${memos.length}</span></div>
+    ${memos.length?`<div id="memos">${memos.map(memoRow).join('')}</div>`:'<p class="hint">Sprachmemo über ● unten. Claude transkribiert und sortiert später ein.</p>'}
+    <button class="btn" data-act="addMemo">+ Text-Memo</button></section>
+
+  <section class="card" data-item="${l.id}"><h2 class="sec">Check &amp; Notizen</h2>
+    <div class="chips small">${LOC_FLAGS.map(k=>chip('flags',k,(l.flags||[]).includes(k))).join('')}</div>
     <div class="grid">
-    ${F('Location / Motiv','name',l.name,{cls:'span2'})}
-    ${F('Datum','date',l.date,{type:'date'})}${F('Uhrzeit','time',l.time,{type:'time'})}
+    ${F('VFX','vfx',l.vfx,{type:'textarea',rows:3,cls:'span2',ph:'Cleanups, Set Extension, Sky, Marker-Möglichkeiten, Maße, Scan/HDRI-Plan'})}
+    ${F('Licht','light',l.light,{type:'textarea',rows:2,cls:'span2',ph:'Fensterrichtung, Schatten, Kunstlicht'})}
+    ${F('Notizen','notes',l.notes,{type:'textarea',rows:3,cls:'span2'})}</div></section>
+
+  <details class="card" data-item="${l.id}"><summary><h2 class="sec">Ort, Kontakt &amp; Sonne</h2><span class="meta mono">${g?'GPS ✓':'kein GPS'}</span></summary>
+    <div class="grid">
     ${F('Adresse','address',l.address,{type:'textarea',rows:2,cls:'span2'})}
     ${F('Kontakt vor Ort','contact',l.contact,{cls:'span2',ph:'Name, Telefon'})}
     ${F('GPS (Lat, Lon)','gps',l.gps,{cls:'span2 mono-in',ph:'13.7563, 100.5018',cap:'off'})}</div>
-    <div class="btns"><button class="btn" data-act="gps">◎ Position übernehmen</button>${g?`<a class="btn" href="https://maps.apple.com/?ll=${g.lat},${g.lon}&q=${encodeURIComponent(l.name||'Location')}" target="_blank" rel="noopener">In Karten öffnen</a>`:''}</div></section>
+    <div class="btns"><button class="btn" data-act="gps">◎ Position übernehmen</button>${g?`<a class="btn" href="https://maps.apple.com/?ll=${g.lat},${g.lon}&q=${encodeURIComponent(l.name||'Location')}" target="_blank" rel="noopener">In Karten öffnen</a>`:''}</div>
+    <div class="sec-row"><h3 class="sec">Sonnenstand</h3><span class="meta mono">${esc(tzLabel())}</span></div><div id="sunBox">${sunHTML(l)}</div></details>
 
-  <section class="card"><div class="sec-row"><h2 class="sec">Sonnenstand</h2><span class="meta mono">${esc(tzLabel())}</span></div><div id="sunBox">${sunHTML(l)}</div></section>
-
-  <section class="card" data-item="${l.id}"><div class="sec-row"><h2 class="sec">Fotos</h2><span class="meta mono" id="phCount">${l.photoCount||0}</span></div>
-    <div id="photos" class="photos"></div>
-    <button class="btn primary block" data-act="finder" data-id="${l.id}">◫ Sucher – Objektiv simulieren</button>
-    <div class="btns"><label class="btn">iPhone-Kamera<input class="vh" type="file" accept="image/*" capture="environment" data-file="photo"></label><label class="btn">Aus Mediathek<input class="vh" type="file" accept="image/*" multiple data-file="photo"></label></div></section>
-
-  <section class="card" data-item="${l.id}"><h2 class="sec">Check</h2>
-    <div class="chips">${LOC_FLAGS.map(k=>chip('flags',k,(l.flags||[]).includes(k))).join('')}</div>
+  <details class="card" data-item="${l.id}"><summary><h2 class="sec">Logistik</h2><span class="meta mono">Zugang · Strom · Ton</span></summary>
     <div class="grid">
     ${F('Zugang / Logistik','access',l.access,{type:'textarea',rows:2,cls:'span2',ph:'Anfahrt, Ladewege, Aufzug, Parken'})}
     ${F('Strom','power',l.power,{type:'textarea',rows:2,cls:'span2',ph:'Anschlüsse, Ampere, Aggregat nötig?'})}
-    ${F('Ton','sound',l.sound,{type:'textarea',rows:2,cls:'span2',ph:'Verkehr, Klima, Flugzeuge, Glocken'})}
-    ${F('Licht','light',l.light,{type:'textarea',rows:2,cls:'span2',ph:'Fensterrichtung, Schatten, Kunstlicht'})}
-    ${F('VFX','vfx',l.vfx,{type:'textarea',rows:3,cls:'span2',ph:'Cleanups, Set Extension, Sky, Marker-Möglichkeiten, Maße, Scan/HDRI-Plan'})}
-    ${F('Notizen','notes',l.notes,{type:'textarea',rows:3,cls:'span2'})}</div></section>
+    ${F('Ton','sound',l.sound,{type:'textarea',rows:2,cls:'span2',ph:'Verkehr, Klima, Flugzeuge, Glocken'})}</div></details>
 
-  <section class="card" data-item="${l.id}"><div class="sec-row"><h2 class="sec">Memos</h2><span class="meta mono">${(l.memos||[]).length}</span></div>
-    <p class="hint">Text per Diktiertaste (offline). Aufnahme speichert zusätzlich Audio.</p>
-    <div id="memos">${(l.memos||[]).map(memoRow).join('')}</div>
-    <div class="btns"><button class="btn" data-act="addMemo">+ Text-Memo</button><button class="btn" id="recBtn" data-act="rec">● Aufnahme</button></div></section>
-
-  <div class="btns"><button class="btn" data-act="report" data-id="${l.id}">Recce-Report (PDF)</button><button class="btn ghost-danger" data-act="del" data-id="${l.id}">Location löschen</button></div>`,
+  <div class="btns"><button class="btn" data-act="report" data-id="${l.id}">Report (PDF)</button><button class="btn ghost-danger" data-act="del" data-id="${l.id}">Location löschen</button></div>
+  ${actBar(l)}`,
   after:()=>{fillPhotos(l);fillAudio(l);}};
 }
 
@@ -602,6 +653,7 @@ function finderHTML(p){const pf=projectFocals(p);const all=[...new Set([...pf,..
   <div class="vf-top"><button class="vf-ic" data-vf="close" aria-label="Schließen">✕</button>
     <select id="vfSensor" aria-label="Sensorformat">${SENSORS.map(s=>`<option value="${s.id}"${s.id===vf.s.sensor?' selected':''}>${esc(s.l)}</option>`).join('')}</select>
     <select id="vfSq" aria-label="Squeeze">${SQUEEZE.map(q=>`<option value="${q}"${q==vf.s.sq?' selected':''}>${q===1?'Sphärisch':q+'x Anamorph'}</option>`).join('')}</select>
+    ${scenesOf(vf.item).length?`<select id="vfScene" aria-label="Szene"><option value="">Szene –</option>${scenesOf(vf.item).map(sc=>`<option value="${sc.id}"${sc.id===vf.sceneId?' selected':''}>${esc(sceneLabel(sc))}</option>`).join('')}</select>`:''}
     <select id="vfAr" aria-label="Framelines">${ASPECTS.map(a=>`<option value="${a[0]}"${a[0]==vf.s.ar?' selected':''}>${a[1]}</option>`).join('')}</select>
     <button class="vf-ic" data-vf="set" aria-label="Einstellungen">⚙</button></div>
   <div class="vf-stage"><canvas id="vfCanvas"></canvas><div id="vfInfo" class="vf-info mono"></div><div id="vfWarn" class="vf-warn" hidden></div><div id="vfFlash" class="vf-flash" hidden></div></div>
@@ -617,7 +669,7 @@ function finderHTML(p){const pf=projectFocals(p);const all=[...new Set([...pf,..
     <div class="btns"><button class="btn" data-vf="lines">Drittel-Linien: ${vf.s.lines?'an':'aus'}</button><button class="btn" data-vf="compass">${vf.heading!=null?'Kompass an':'Kompass aktivieren'}</button></div>
     <button class="btn primary block" data-vf="setclose">Fertig</button></div>
   </div>`;}
-async function vfOpen(item){if(vf.on)return;const p=projectOf(item);vf={on:true,item,s:vfLoad(),heading:vf.heading??null,shots:0};
+async function vfOpen(item){if(vf.on)return;const p=projectOf(item);const fl=photoUI.filter[item.id];vf={on:true,item,s:vfLoad(),heading:vf.heading??null,shots:0,sceneId:fl&&fl!=='all'&&fl!=='none'?fl:(item.lastScene||'')};
   document.body.insertAdjacentHTML('beforeend',finderHTML(p));document.body.classList.add('vf-open');
   vf.el=$('#vf');vf.video=$('#vfVideo');vf.canvas=$('#vfCanvas');
   vf.el.addEventListener('click',vfClick);vf.el.addEventListener('change',vfChange);vf.el.addEventListener('input',vfInput);
@@ -661,7 +713,7 @@ async function vfShoot(){const v=vf.video;const W=v.videoWidth,H=v.videoHeight;i
   const sen=sensorObj();const meta={mm:+vf.s.mm,sensor:sen.l,sq:+vf.s.sq,ar:+vf.s.ar,hfov:+g.hf.toFixed(1),heading:hd!=null?Math.round(hd):null};const item=vf.item;
   const f=$('#vfFlash');if(f){f.hidden=false;setTimeout(()=>f.hidden=true,120);}
   const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.86));if(!blob){toast('Foto fehlgeschlagen');return;}
-  const ph={id:uid(),setupId:item.id,buf:await blob.arrayBuffer(),type:'image/jpeg',caption:`${meta.mm}mm${meta.sq>1?' '+meta.sq+'x':''} · ${(ASPECTS.find(a=>a[0]==meta.ar)||[0,''])[1]}`,meta,created:Date.now()};
+  const ph={id:uid(),setupId:item.id,scene:vf.sceneId||'',buf:await blob.arrayBuffer(),type:'image/jpeg',caption:`${meta.mm}mm${meta.sq>1?' '+meta.sq+'x':''} · ${(ASPECTS.find(a=>a[0]==meta.ar)||[0,''])[1]}`,meta,created:Date.now()};
   await idb('photos','readwrite',st=>st.put(ph));item.photoCount=(item.photoCount||0)+1;touch(item);vf.shots++;
   const u=URL.createObjectURL(blob);(vf.urls=vf.urls||[]).push({src:u,cap:ph.caption});const th=$('#vfThumb');if(th){th.style.backgroundImage=`url(${u})`;}
   const vc=$('#vfCount');if(vc)vc.textContent=vf.shots+' neu';}
@@ -669,13 +721,14 @@ async function vfCompass(btn){
   try{if(window.DeviceOrientationEvent&&typeof DeviceOrientationEvent.requestPermission==='function'){const r=await DeviceOrientationEvent.requestPermission();if(r!=='granted'){toast('Kompass nicht erlaubt');return;}}}catch(e){toast('Kompass: '+e.message);return;}
   vf.onOri=e=>{if(typeof e.webkitCompassHeading==='number')vf.heading=e.webkitCompassHeading;else if(e.absolute&&e.alpha!=null)vf.heading=(360-e.alpha)%360;};
   window.addEventListener('deviceorientation',vf.onOri);btn.textContent='Kompass an';toast('Kompass aktiv – Blickrichtung wird ins Foto geschrieben (±10°)');}
-function vfClick(e){if(e.target.closest('#vfThumb')&&vf.urls&&vf.urls.length){vwOpen(vf.urls,vf.urls.length-1);return;}const mmb=e.target.closest('[data-mm]');if(mmb){vfSetMm(mmb.dataset.mm);return;}
+function vfClick(e){if(e.target.closest('#vfThumb')&&vf.urls&&vf.urls.length){vwOpen(vf.urls,vf.urls.length-1,null);return;}const mmb=e.target.closest('[data-mm]');if(mmb){vfSetMm(mmb.dataset.mm);return;}
   const b=e.target.closest('[data-vf]');if(!b)return;const a=b.dataset.vf;
   if(a==='close')vfClose();else if(a==='shoot')vfShoot().catch(err=>toast('Fehler: '+err.message));
   else if(a==='set')$('#vfSet').hidden=false;else if(a==='setclose')$('#vfSet').hidden=true;
   else if(a==='lines'){vf.s.lines=!vf.s.lines;b.textContent='Drittel-Linien: '+(vf.s.lines?'an':'aus');vfSave();}
   else if(a==='compass')vfCompass(b);}
 function vfChange(e){const t=e.target;
+  if(t.id==='vfScene'){vf.sceneId=t.value;vf.item.lastScene=t.value;touch(vf.item);return;}
   if(t.id==='vfSensor')vf.s.sensor=t.value;else if(t.id==='vfSq')vf.s.sq=+t.value;else if(t.id==='vfAr')vf.s.ar=+t.value;
   else if(t.id==='vfCam'){vf.s.dev=t.value;vfStart();}
   vfSave();}
@@ -722,7 +775,7 @@ function rLoc(l){const g=parseGPS(l.gps);const d=g?sunDay(l.date,g.lat,g.lon):nu
   <div class="r-photos" data-setup="${l.id}"></div></div>`;}
 async function fillReportPhotos(days,locs){for(const s of [...days.flatMap(d=>kids(d.id,'setup')),...(locs||[])]){if(!s.photoCount)continue;
   const box=document.querySelector(`.r-photos[data-setup="${s.id}"]`);if(!box)continue;
-  const list=await getPhotos(s.id);box.innerHTML=list.map(ph=>{const u=URL.createObjectURL(new Blob([ph.buf],{type:ph.type}));objURLs.push(u);return `<figure><img src="${u}" alt="${esc(ph.caption||'Set-Foto')}">${ph.caption?`<figcaption>${esc(ph.caption)}</figcaption>`:''}</figure>`;}).join('');}}
+  const scs=scenesOf(s);const ord=new Map(scs.map((x,i)=>[x.id,i]));const list=(await getPhotos(s.id)).sort((a,b)=>(ord.has(a.scene)?ord.get(a.scene):999)-(ord.has(b.scene)?ord.get(b.scene):999));box.innerHTML=list.map(ph=>{const sc=scs.find(x=>x.id===ph.scene);ph=Object.assign({},ph,{caption:[sc?sceneLabel(sc):'',ph.caption].filter(Boolean).join(' · ')});const u=URL.createObjectURL(new Blob([ph.buf],{type:ph.type}));objURLs.push(u);return `<figure><img src="${u}" alt="${esc(ph.caption||'Set-Foto')}">${ph.caption?`<figcaption>${esc(ph.caption)}</figcaption>`:''}</figure>`;}).join('');}}
 
 /* ---------- Claude round trip ---------- */
 const PATCH_SETUP=/^(scene|slate|time|desc|kinds|refsNote|notes|refs\.[a-z]+|cams\.\d+\.(cam|body|lens|mm|tstop|iso|shutter|fps|filter|kelvin|height|tilt|focus|rig|note)|takes\.\d+\.(n|circled|clip|note))$/;
@@ -737,11 +790,12 @@ function memoExport(p){
   '  cams.<index>.<feld> (felder: cam, body, lens, mm, tstop, iso, shutter, fps, filter, kelvin, height (cm), tilt (°), focus (m), rig, note), neuer Index = neue Kamera,',
   '  takes.<index>.<feld> (n, circled true/false, clip, note), neuer Index = neuer Take.',
   'Erlaubte Drehtag-Felder: date (YYYY-MM-DD), dt, location, weather (Array), notes.',
-  'Erlaubte Location-Felder: name, kind (Tech Recce|Location Scout), date, time, address, contact, gps ("lat, lon"), flags (Array aus: '+LOC_FLAGS.join(', ')+'), access, power, sound, light, vfx, notes.',
+  'Erlaubte Location-Felder: name, kind (Tech Recce|Location Scout|Director Scout), date, time, address, contact, gps ("lat, lon"), flags (Array aus: '+LOC_FLAGS.join(', ')+'), access, power, sound, light, vfx, notes.',
   'Alle Werte als String, außer refs/circled (Boolean) und kinds/weather (Array). Überschreibe keine Werte ohne Grund. Was in kein Feld passt, kommt in appendNotes. Markiere verarbeitete Memos in doneMemos.',
   'Audio-Memos: Transkribiere das Audio (Feld audio, Base64), schreibe das bereinigte Transkript in memoText des Setups/der Location, zu dem das Memo gehört.',
   'Ordne Inhalte dem richtigen Ziel zu: Ein Memo mit „zu Take N“ betrifft diesen Take; nennt das Memo andere Takes, Setups oder Szenen, trage die Infos dort ein (takes.<index>.note, circled, Kamerafelder, refs usw.). Take-Index = Position in der takes-Liste (takes.0 = erster Take).','');
   out.push(`PROJEKT-ID: ${p.id}`,`Projekt: ${p.name}${p.prodnr?' ('+p.prodnr+')':''}`,'');
+  if((p.scenes||[]).length)out.push('SZENEN: '+p.scenes.filter(s=>s.n||s.name).map(s=>`${s.n}=${s.name||'–'}`).join(' | '),'');
   let n=0;
   for(const d of kids(p.id,'day')){const ss=kids(d.id,'setup').filter(s=>(s.memos||[]).some(m=>!m.done&&(m.text.trim()||m.audio)));
     if(!ss.length)continue;
@@ -825,12 +879,12 @@ function b64ToBuf(b64){const s=atob(b64);const b=new Uint8Array(s.length);for(le
 async function buildBackup(p){const items=[p,...locsOf(p)];for(const d of kids(p.id,'day')){items.push(d);items.push(...kids(d.id,'setup'));}
   const photos=[],audio=[];
   for(const s of items.filter(i=>i.type==='setup'||i.type==='loc')){
-    for(const ph of await getPhotos(s.id))photos.push({id:ph.id,setupId:ph.setupId,caption:ph.caption,created:ph.created,type:ph.type,data:bufToB64(ph.buf)});
+    for(const ph of await getPhotos(s.id))photos.push({id:ph.id,setupId:ph.setupId,caption:ph.caption,scene:ph.scene||'',meta:ph.meta||null,created:ph.created,type:ph.type,data:bufToB64(ph.buf)});
     for(const a of await getAudio(s.id))audio.push({id:a.id,setupId:a.setupId,created:a.created,type:a.type,data:bufToB64(a.buf)});}
   return JSON.stringify({app:'vfx-setlog',version:1,exported:new Date().toISOString(),items,photos,audio});}
 async function importBackup(file){if(!file)return;
   try{const j=JSON.parse(await file.text());if(j.app!=='vfx-setlog'||!Array.isArray(j.items))throw new Error('Keine Setlog-Backup-Datei.');
-    const ph=(j.photos||[]).map(x=>({id:x.id,setupId:x.setupId,caption:x.caption||'',created:x.created||Date.now(),type:x.type||'image/jpeg',buf:b64ToBuf(x.data)}));
+    const ph=(j.photos||[]).map(x=>({id:x.id,setupId:x.setupId,caption:x.caption||'',scene:x.scene||'',meta:x.meta||null,created:x.created||Date.now(),type:x.type||'image/jpeg',buf:b64ToBuf(x.data)}));
     const au=(j.audio||[]).map(x=>({id:x.id,setupId:x.setupId,created:x.created||Date.now(),type:x.type||'audio/mp4',buf:b64ToBuf(x.data)}));
     await txn(['items','photos','audio'],'readwrite',t=>{const si=t.objectStore('items'),sp=t.objectStore('photos'),sa=t.objectStore('audio');j.items.forEach(i=>si.put(i));ph.forEach(x=>sp.put(x));au.forEach(x=>sa.put(x));});
     j.items.forEach(i=>S.set(i.id,i));const p=j.items.find(i=>i.type==='project');
@@ -854,13 +908,19 @@ function deliver(name,content,type,onDone){let file=new File([content],name,{typ
     else if(r.startsWith('err:'))toast('Teilen fehlgeschlagen: '+r.slice(4));};}
 $('#sheetX').onclick=()=>$('#sheet').hidden=true;
 let vw={list:[]};
-function vwOpen(list,idx){vw.list=list;const tr=$('#vwTrack');
+function vwOpen(list,idx,item){vw.list=list;vw.item=item||null;vw.dirty=false;vw.pi=-1;const tr=$('#vwTrack');
   tr.innerHTML=list.map((x,i)=>`<div class="vw-slide"><img src="${x.src}" alt="${esc(x.cap||'Foto '+(i+1))}"${Math.abs(i-idx)>2?' loading="lazy"':''}></div>`).join('');
   $('#viewer').hidden=false;document.body.classList.add('vf-open');
   vw.i=idx;const go_=()=>{tr.style.scrollSnapType='none';tr.scrollLeft=idx*tr.clientWidth;tr.style.scrollSnapType='';vwUpd();};requestAnimationFrame(()=>requestAnimationFrame(go_));setTimeout(go_,80);}
 function vwUpd(){const tr=$('#vwTrack');const i=Math.max(0,Math.min(vw.list.length-1,Math.round(tr.scrollLeft/Math.max(1,tr.clientWidth))));
-  $('#vwCount').textContent=`${i+1} / ${vw.list.length}`;$('#vwCap').textContent=vw.list[i]?vw.list[i].cap||'':'';vw.i=i;}
-function vwClose(){$('#viewer').hidden=true;$('#vwTrack').innerHTML='';if(!vf.on)document.body.classList.remove('vf-open');}
+  $('#vwCount').textContent=`${i+1} / ${vw.list.length}`;$('#vwCap').textContent=vw.list[i]?vw.list[i].cap||'':'';vw.i=i;if(vw.pi!==i){vw.pi=i;vwPanel();}}
+function vwPanel(){const bot=$('#vwBot');const x=vw.list[vw.i];if(!x||!x.pid||!vw.item){bot.hidden=true;bot.innerHTML='';return;}
+  const ph=photoCache.get(x.pid);const scs=scenesOf(vw.item);bot.hidden=false;
+  bot.innerHTML=`${scs.length?`<div class="vw-chips">${[...scs.map(sc=>[sc.id,sceneLabel(sc)]),['','Ohne Szene']].map(([k,lb])=>`<button type="button" class="chip" data-vwscene="${k}" aria-pressed="${((ph&&ph.scene)||'')===k}">${esc(lb)}</button>`).join('')}</div>`:''}<input id="vwCapIn" value="${esc(ph?ph.caption:'')}" placeholder="Beschriftung" autocomplete="off">`;}
+$('#vwBot').addEventListener('click',async e=>{const b=e.target.closest('[data-vwscene]');if(!b)return;const x=vw.list[vw.i];if(!x)return;
+  await setPhotoScene([x.pid],b.dataset.vwscene);vw.dirty=true;vwPanel();});
+$('#vwBot').addEventListener('input',e=>{if(e.target.id!=='vwCapIn')return;const x=vw.list[vw.i];if(!x)return;x.cap=e.target.value;$('#vwCap').textContent=x.cap;saveCaption(x.pid,x.cap);vw.dirty=true;});
+function vwClose(){$('#viewer').hidden=true;$('#vwTrack').innerHTML='';$('#vwBot').hidden=true;if(!vf.on)document.body.classList.remove('vf-open');if(vw.dirty&&vw.item&&!vf.on)setTimeout(()=>fillPhotos(vw.item),450);vw.dirty=false;}
 $('#vwTrack').addEventListener('scroll',()=>{cancelAnimationFrame(vw.raf);vw.raf=requestAnimationFrame(vwUpd);},{passive:true});
 $('#vwClose').onclick=vwClose;
 window.addEventListener('resize',()=>{if(!$('#viewer').hidden){const tr=$('#vwTrack');setTimeout(()=>{tr.scrollLeft=(vw.i||0)*tr.clientWidth;},200);}});
@@ -900,6 +960,14 @@ app.addEventListener('click',async e=>{
     case 'newDay':{const p=S.get(b.dataset.id);const ds=kids(p.id,'day');const dt=ds.reduce((m,d)=>Math.max(m,+d.dt||0),0)+1;
       const d={id:uid(),type:'day',parent:p.id,created:Date.now(),date:today(),dt:String(dt),location:ds.length?ds[ds.length-1].location||'':'',weather:[],notes:''};await putNow(d);go('day',d.id);break;}
     case 'newLoc':{const p=S.get(b.dataset.id);const l={id:uid(),type:'loc',parent:p.id,created:Date.now(),kind:'Tech Recce',name:'Neue Location',date:today(),time:nowHM(),address:'',contact:'',gps:'',flags:[],access:'',power:'',sound:'',light:'',vfx:'',notes:'',memos:[],photoCount:0};await putNow(l);go('loc',l.id);setTimeout(()=>{const f=$('#f_name');f&&f.select();},50);break;}
+    case 'thumb':{const pid=b.dataset.pid;if(photoUI.sel){photoUI.sel.has(pid)?photoUI.sel.delete(pid):photoUI.sel.add(pid);fillPhotos(it);break;}
+      const idx=photoUI.order.findIndex(x=>x.pid===pid);vwOpen(photoUI.order.map(x=>({...x})),Math.max(0,idx),it);break;}
+    case 'phFilter':{photoUI.filter[it.id]=b.dataset.val;fillPhotos(it);break;}
+    case 'selMode':{photoUI.sel=photoUI.sel?null:new Set();fillPhotos(it);break;}
+    case 'assignSel':{if(!photoUI.sel||!photoUI.sel.size){toast('Erst Fotos antippen');break;}const n=await setPhotoScene([...photoUI.sel],b.dataset.val);const sc=scenesOf(it).find(x=>x.id===b.dataset.val);photoUI.sel=null;await fillPhotos(it);toast(`${n} Foto${n>1?'s':''} → ${sceneLabel(sc)}`);break;}
+    case 'delSel':{if(!photoUI.sel||!photoUI.sel.size)break;const ids=[...photoUI.sel];await idb('photos','readwrite',st=>{ids.forEach(i=>st.delete(i));});photoUI.sel=null;await fillPhotos(it);toast(`${ids.length} gelöscht`);break;}
+    case 'addScene':{const sc=(it.scenes=it.scenes||[]);const last=sc[sc.length-1];const nn=last&&/^\d+$/.test(last.n)?String(+last.n+1):'';sc.push({id:uid(),n:nn,name:''});touch(it);rerender();const ins=document.querySelectorAll('.scn input');const t=ins[ins.length-(nn?1:2)];if(t)t.focus();break;}
+    case 'delScene':{it.scenes.splice(+b.dataset.i,1);touch(it);rerender();break;}
     case 'setKind':{it.kind=b.dataset.val;touch(it);rerender();break;}
     case 'finder':{await flush();vfOpen(S.get(b.dataset.id));break;}
     case 'gps':{if(!navigator.geolocation){toast('Standort nicht verfügbar');break;}b.textContent='◎ Suche Position…';
