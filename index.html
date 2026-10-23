@@ -99,6 +99,16 @@ textarea{resize:vertical}
 .ab.main{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
 .ab.rec{background:var(--rec);color:#fff;border-color:var(--rec);font-size:14px;font-weight:700}
 .actbar-space{height:84px}
+#ls{position:fixed;inset:0;z-index:45;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center}
+.ls-in{background:var(--surface);width:100%;max-width:560px;max-height:92%;overflow:auto;border-radius:16px 16px 0 0;padding:16px max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:12px}
+.ls-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ls-grid select,#le select{font:inherit;font-size:15px;min-height:44px;border-radius:8px;border:1px solid var(--line);background:var(--surface2);color:var(--fg);padding:0 8px;width:100%;min-width:0}
+#le select{background:#1d2024;color:#eee;border-color:#333;width:auto;flex:none;max-width:60vw}
+.chip.own{border-color:var(--accent)}
+.ls-shoot{min-height:56px;font-size:17px}
+#le{position:fixed;inset:0;z-index:80;background:#000;color:#eee;display:flex;flex-direction:column;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
+#leC{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
+@media (orientation:landscape) and (max-height:500px){#le{display:grid;grid-template-columns:1fr 230px;grid-template-rows:auto 1fr}#le .ed-top{grid-column:1/3}#le .ed-stage{grid-column:1}#le .ed-bar{grid-column:2;overflow-y:auto}#le .ed-row{flex-wrap:wrap;overflow:visible}}
 .scn{display:grid;grid-template-columns:72px 1fr 40px;gap:6px;align-items:center}
 details.card>summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px}
 details.card>summary::-webkit-details-marker{display:none}
@@ -256,7 +266,7 @@ window.addEventListener('unhandledrejection',function(e){var r=e.reason;window._
 </script>
 <script>
 'use strict';
-const APP_VERSION='1.5.0';
+const APP_VERSION='1.6.0';
 /* Kamera/Mikro offen halten: iOS fragt bei jedem neuen Zugriff erneut – Streams werden daher wiederverwendet und erst nach Leerlauf freigegeben */
 const KEEP_MS=3*60000;const media={cam:null,camKey:'',camT:0,mic:null,micT:0};
 const liveStream=s=>!!(s&&s.getTracks().some(t=>t.readyState==='live'));
@@ -292,11 +302,12 @@ const DL={fps:['23.976','24','25','29.97','48','50','100'],shutter:['180°','172
 /* ---------- IndexedDB ---------- */
 let db;
 function openDB(){return new Promise((res,rej)=>{let done=false;
-  const tryOpen=()=>{let r;try{r=indexedDB.open('vfx-setlog',1);}catch(e){if(!done){done=true;rej(e);}return;}
+  const tryOpen=()=>{let r;try{r=indexedDB.open('vfx-setlog',2);}catch(e){if(!done){done=true;rej(e);}return;}
     r.onupgradeneeded=()=>{const d=r.result;
       if(!d.objectStoreNames.contains('items'))d.createObjectStore('items',{keyPath:'id'});
       if(!d.objectStoreNames.contains('photos'))d.createObjectStore('photos',{keyPath:'id'}).createIndex('setup','setupId');
-      if(!d.objectStoreNames.contains('audio'))d.createObjectStore('audio',{keyPath:'id'}).createIndex('setup','setupId');};
+      if(!d.objectStoreNames.contains('audio'))d.createObjectStore('audio',{keyPath:'id'}).createIndex('setup','setupId');
+      if(!d.objectStoreNames.contains('orig'))d.createObjectStore('orig',{keyPath:'id'}).createIndex('setup','setupId');};
     r.onsuccess=()=>{if(done){try{r.result.close()}catch{}return;}done=true;res(r.result);};
     r.onerror=()=>{if(!done){done=true;rej(r.error||new Error('IndexedDB-Fehler'));}};};
   if(!window.indexedDB){rej(new Error('IndexedDB nicht verfügbar'));return;}
@@ -571,7 +582,7 @@ function locRow(l){const m=(l.memos||[]).filter(x=>!x.done&&x.text.trim()).lengt
   return `<button class="row" data-act="open" data-v="loc" data-id="${l.id}"><span class="badge mono">${esc(KIND_BADGE[l.kind]||'RECCE')}</span><div class="row-main"><strong>${esc(l.name||'Ohne Namen')}</strong><span class="meta">${esc([l.date&&fmtDate(l.date),l.address&&l.address.split('\n')[0]].filter(Boolean).join(' · ')||'—')}</span></div><span class="count mono">${info}</span></button>`;}
 function parseGPS(s){const m=String(s||'').replace(/,/g,' ').match(/(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)/);if(!m)return null;const lat=+m[1],lon=+m[2];return Math.abs(lat)<=90&&Math.abs(lon)<=180?{lat,lon}:null;}
 function actBar(it){return `<div class="actbar-space"></div><div class="actbar" data-item="${it.id}">
-  <button type="button" class="ab main" data-act="finder" data-id="${it.id}">◫<span>Sucher</span></button>
+  <button type="button" class="ab main" data-act="lensSheet" data-id="${it.id}">◫<span>Objektiv-Foto</span></button>
   <label class="ab">📷<span>Foto</span><input class="vh" type="file" accept="image/*" capture="environment" data-file="photo"></label>
   <button type="button" class="ab" id="recBtn" data-act="rec">●<span>Sprachmemo</span></button></div>`;}
 function vLoc(cur){
@@ -663,7 +674,7 @@ const FOCALS=[12,14,16,18,21,25,29,32,35,40,50,65,75,85,100,135,180];
 const VF_KEY='setlog-vf';
 let vf={on:false};
 function vfLoad(){let s={};try{s=JSON.parse(localStorage.getItem(VF_KEY)||'{}')||{};}catch{}return Object.assign({sensor:'a35og',sq:1,ar:2.39,mm:35,hfov:{},lines:true},s);}
-function vfSave(){try{localStorage.setItem(VF_KEY,JSON.stringify({sensor:vf.s.sensor,sq:vf.s.sq,ar:vf.s.ar,mm:vf.s.mm,hfov:vf.s.hfov,lines:vf.s.lines,dev:vf.s.dev,hires:!!vf.s.hires}));}catch{}}
+function vfSave(){try{localStorage.setItem(VF_KEY,JSON.stringify({sensor:vf.s.sensor,sq:vf.s.sq,ar:vf.s.ar,mm:vf.s.mm,hfov:vf.s.hfov,lines:vf.s.lines,dev:vf.s.dev,hires:!!vf.s.hires,multi:vf.s.multi||null}));}catch{}}
 function defHfov(label){label=String(label||'');if(/ultra|weitwinkel/i.test(label))return 106;if(/tele/i.test(label))return 36.8;return 67.2;}
 const curHfov=()=>{const k=vf.label||'default';return +vf.s.hfov[k]||defHfov(vf.label);};
 const sensorObj=()=>SENSORS.find(x=>x.id===vf.s.sensor)||SENSORS[0];
@@ -676,11 +687,11 @@ function fitRect(aw,ah,bw,bh){const k=Math.min(bw/aw,bh/ah);const w=aw*k,h=ah*k;
 function drawCrop(ctx,v,W,H,g,dx,dy,dw,dh){ctx.fillStyle='#000';ctx.fillRect(dx,dy,dw,dh);
   const sx0=Math.max(0,g.cx),sy0=Math.max(0,g.cy),sx1=Math.min(W,g.cx+g.cw),sy1=Math.min(H,g.cy+g.ch);if(sx1<=sx0||sy1<=sy0)return;
   const kx=dw/g.cw,ky=dh/g.ch;ctx.drawImage(v,sx0,sy0,sx1-sx0,sy1-sy0,dx+(sx0-g.cx)*kx,dy+(sy0-g.cy)*ky,(sx1-sx0)*kx,(sy1-sy0)*ky);}
-function drawLines(ctx,r,lw){const ar=+vf.s.ar;const capA=r.w/r.h;let f=r;
+function drawLines(ctx,r,lw,L){L=L||vf.s;const ar=+L.ar;const capA=r.w/r.h;let f=r;
   if(ar){f=ar>capA?{w:r.w,h:r.w/ar}:{w:r.h*ar,h:r.h};f.x=r.x+(r.w-f.w)/2;f.y=r.y+(r.h-f.h)/2;
     ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(r.x,r.y,r.w,f.y-r.y);ctx.fillRect(r.x,f.y+f.h,r.w,r.y+r.h-f.y-f.h);ctx.fillRect(r.x,f.y,f.x-r.x,f.h);ctx.fillRect(f.x+f.w,f.y,r.x+r.w-f.x-f.w,f.h);
     ctx.strokeStyle='rgba(255,255,255,.9)';ctx.lineWidth=lw;ctx.strokeRect(f.x,f.y,f.w,f.h);}
-  if(vf.s.lines){ctx.strokeStyle='rgba(255,255,255,.35)';ctx.lineWidth=lw*.7;ctx.beginPath();
+  if(L.lines){ctx.strokeStyle='rgba(255,255,255,.35)';ctx.lineWidth=lw*.7;ctx.beginPath();
     for(let i=1;i<3;i++){ctx.moveTo(f.x+f.w*i/3,f.y);ctx.lineTo(f.x+f.w*i/3,f.y+f.h);ctx.moveTo(f.x,f.y+f.h*i/3);ctx.lineTo(f.x+f.w,f.y+f.h*i/3);}ctx.stroke();}
   const c=Math.min(f.w,f.h)*.03;ctx.strokeStyle='rgba(255,255,255,.85)';ctx.lineWidth=lw;ctx.beginPath();ctx.moveTo(f.x+f.w/2-c,f.y+f.h/2);ctx.lineTo(f.x+f.w/2+c,f.y+f.h/2);ctx.moveTo(f.x+f.w/2,f.y+f.h/2-c);ctx.lineTo(f.x+f.w/2,f.y+f.h/2+c);ctx.stroke();}
 function vfLabel(g){const sen=sensorObj();const sq=+vf.s.sq||1;const ar=ASPECTS.find(a=>a[0]==vf.s.ar);
@@ -705,7 +716,7 @@ function finderHTML(p){const pf=projectFocals(p);const all=[...new Set([...pf,..
     <label class="fld" id="vfCamWrap" hidden><span>iPhone-Kamera</span><select id="vfCam"></select></label>
     <label class="fld"><span>Kalibrierung: horizontaler Bildwinkel dieser iPhone-Kamera (°)</span><input id="vfHf" type="number" inputmode="decimal" step="0.1" value="${curHfov()}"></label>
     <p class="hint">iPhone 12 Hauptkamera ≈ 67°, Ultra-Weitwinkel ≈ 106°. Prüfen: Objekt mit Breite B aus Abstand D bildfüllend → 2·atan(B/2D).</p>
-    <div class="btns"><button class="btn" data-vf="lines">Drittel-Linien: ${vf.s.lines?'an':'aus'}</button><p class="hint">Live-Sucher nutzt das Videobild (Full HD). 4K = schärfer, aber mehr Speicher/Wärme. Beste Qualität: <b>HQ</b> neben dem Auslöser (echtes iPhone-Foto, gleicher Ausschnitt).</p><button class="btn" data-vf="hires">4K-Kamerastream: ${vf.s.hires?'an':'aus'}</button><button class="btn" data-vf="compass">${vf.heading!=null?'Kompass an':'Kompass aktivieren'}</button></div>
+    <div class="btns"><button class="btn" data-vf="lines">Drittel-Linien: ${vf.s.lines?'an':'aus'}</button><p class="hint">Live-Vorschau nutzt das Videobild – der Bildwinkel kann je nach iPhone-Kamera abweichen. Maßgeblich ist <b>HQ</b> bzw. Objektiv-Foto. Live-Sucher nutzt das Videobild (Full HD). 4K = schärfer, aber mehr Speicher/Wärme. Beste Qualität: <b>HQ</b> neben dem Auslöser (echtes iPhone-Foto, gleicher Ausschnitt).</p><button class="btn" data-vf="hires">4K-Kamerastream: ${vf.s.hires?'an':'aus'}</button><button class="btn" data-vf="compass">${vf.heading!=null?'Kompass an':'Kompass aktivieren'}</button></div>
     <button class="btn primary block" data-vf="setclose">Fertig</button></div>
   </div>`;}
 async function vfOpen(item){if(vf.on)return;stopRec();const pb=$('#photos');if(pb){pb.innerHTML='';objURLs.forEach(u=>URL.revokeObjectURL(u));objURLs=[];}const p=projectOf(item);const fl=photoUI.filter[item.id];vf={on:true,item,s:vfLoad(),heading:vf.heading??null,shots:0,sceneId:fl&&fl!=='all'&&fl!=='none'?fl:(item.lastScene||'')};
@@ -776,11 +787,9 @@ function exifFocal35(buf){try{const d=new DataView(buf);if(d.getUint16(0)!==0xFF
       const e35=findTag(exifIfd,0xA405);if(e35){const v=u16(e35+8);if(v>0)return v;}return null;}
     if((m&0xFF00)!==0xFF00)break;o+=2+len;}}catch{}return null;}
 async function vfHQ(file){vf.hqPending=false;if(!file)return;toast('Foto wird berechnet…');
-  try{const buf=await file.arrayBuffer();const f35=exifFocal35(buf);const img=await loadImg(new Blob([buf],{type:file.type||'image/jpeg'}));
-    const W=img.naturalWidth,H=img.naturalHeight;const a=Math.max(W,H)/Math.min(W,H);const longEq=43.27*a/Math.sqrt(1+a*a);
-    const hfo=f35?2*Math.atan(longEq/2/f35)/RAD:null;
-    const r=await vfCompose(img,W,H,hfo,`HQ ${f35?f35+'mm-Äq.':'iPhone'}`);await vfStore(r);
-    toast(f35?`HQ-Foto gespeichert (iPhone ${f35} mm KB)`:'HQ-Foto gespeichert – Bildwinkel aus Kalibrierung');}
+  try{const out=await lensImport(vf.item,[file],[+vf.s.mm],vf.sceneId);vf.shots+=out.length;
+    for(const ph of out){const u=URL.createObjectURL(phBlob(ph));(vf.urls=vf.urls||[]).push({src:u,cap:ph.caption});const th=$('#vfThumb');if(th)th.style.backgroundImage=`url(${u})`;}
+    const vc=$('#vfCount');if(vc)vc.textContent=vf.shots+' neu';}
   catch(e){toast('HQ-Foto fehlgeschlagen: '+e.message);}
   if(vf.on&&!liveStream(vf.stream))vfStart(true);}
 async function vfCompass(btn){
@@ -805,6 +814,112 @@ function vfChange(e){const t=e.target;
 function vfInput(e){const t=e.target;
   if(t.id==='vfMm'&&+t.value>0){vf.s.mm=+t.value;document.querySelectorAll('.vf-mm').forEach(b=>b.setAttribute('aria-pressed',b.dataset.mm==t.value));vfSave();}
   if(t.id==='vfHf'&&+t.value>10&&+t.value<170){vf.s.hfov[vf.label||'default']=+t.value;vfSave();}}
+
+/* ---------- Objektiv-Foto: echtes iPhone-Foto, Ausschnitt nach Brennweite (nachträglich änderbar) ---------- */
+const getOrig=id=>idb('orig','readonly',s=>s.get(id));
+function origHfov(o){const W=o.W||4032,H=o.H||3024;const a=Math.max(W,H)/Math.min(W,H);const longEq=43.27*a/Math.sqrt(1+a*a);return 2*Math.atan(longEq/2/(o.f35||26))/RAD;}
+function lensGeom(W,H,hf,L){const sen=SENSORS.find(x=>x.id===L.sensor)||SENSORS[0];const sq=+L.sq||1,mm=Math.max(1,+L.mm||35);
+  const fpx=(Math.max(W,H)/2)/Math.tan(hf*RAD/2);const cw=fpx*sen.w*sq/mm,ch=fpx*sen.h/mm;
+  return {cw,ch,cx:(W-cw)/2+(+L.ox||0)*W,cy:(H-ch)/2+(+L.oy||0)*H,cover:cw<=W*1.005&&ch<=H*1.005,hf:2*Math.atan(sen.w*sq/2/mm)/RAD,sen};}
+function lensLabel(L,g){const sq=+L.sq||1;const ar=ASPECTS.find(a=>a[0]==L.ar);return `${L.mm}mm${sq>1?' · '+sq+'x anamorph':''} · ${g.sen.l} · ${ar?ar[1]:''} · HFOV ${g.hf.toFixed(1)}°`;}
+const lensCaption=L=>`${L.mm}mm${(+L.sq||1)>1?' '+L.sq+'x':''} · ${(ASPECTS.find(a=>a[0]==L.ar)||[0,''])[1]}`;
+function clampOff(L,W,H,hf){const g=lensGeom(W,H,hf,Object.assign({},L,{ox:0,oy:0}));const mx=Math.max(0,(W-g.cw)/2)/W,my=Math.max(0,(H-g.ch)/2)/H;
+  L.ox=Math.max(-mx,Math.min(mx,+L.ox||0));L.oy=Math.max(-my,Math.min(my,+L.oy||0));return L;}
+async function composeLens(img,W,H,hf,L,info){const g=lensGeom(W,H,hf,L);const outW=Math.round(Math.min(4000,Math.max(1600,Math.min(g.cw,W))));const outH=Math.round(outW*g.ch/g.cw);const bar=Math.round(outW*0.032);
+  const c=document.createElement('canvas');c.width=outW;c.height=outH+bar;const ctx=c.getContext('2d');ctx.imageSmoothingQuality='high';
+  drawCrop(ctx,img,W,H,g,0,0,outW,outH);drawLines(ctx,{x:0,y:0,w:outW,h:outH},Math.max(2,outW/900),L);
+  const txt=[lensLabel(L,g),info].filter(Boolean).join(' · ');
+  ctx.fillStyle='#111';ctx.fillRect(0,outH,outW,bar);ctx.fillStyle='#f0b23a';let fs=Math.round(bar*.5);ctx.font=`600 ${fs}px -apple-system,Helvetica,Arial,sans-serif`;ctx.textBaseline='middle';
+  while(ctx.measureText(txt).width>outW-bar&&fs>8){fs--;ctx.font=`600 ${fs}px -apple-system,Helvetica,Arial,sans-serif`;}ctx.fillText(txt,bar*.5,outH+bar/2);
+  return {blob:await new Promise(r=>c.toBlob(r,'image/jpeg',.92)),g};}
+async function renderLensPhoto(ph,o,img){const hf=origHfov(o);clampOff(ph.lens,o.W,o.H,hf);
+  const info=[`iPhone ${o.f35?o.f35+' mm KB':'(26 mm angenommen)'}`,fmtDT(o.created)].join(' · ');
+  const r=await composeLens(img,o.W,o.H,hf,ph.lens,info);if(!r.blob)throw new Error('Rendern fehlgeschlagen');
+  const auto=!ph.caption||ph.caption===ph.autoCap;ph.autoCap=lensCaption(ph.lens);if(auto)ph.caption=ph.autoCap;
+  ph.buf=await r.blob.arrayBuffer();ph.type='image/jpeg';ph.meta={mm:+ph.lens.mm,sensor:r.g.sen.l,sq:+ph.lens.sq,ar:+ph.lens.ar,hfov:+r.g.hf.toFixed(1),src:'iPhone-Foto',cover:r.g.cover};
+  if(ph.ann&&ph.ann.length){const c=document.createElement('canvas');const bi=await loadImg(new Blob([ph.buf],{type:'image/jpeg'}));c.width=bi.naturalWidth;c.height=bi.naturalHeight;const ctx=c.getContext('2d');ctx.drawImage(bi,0,0);const rr={x:0,y:0,w:c.width,h:c.height};ph.ann.forEach(it=>drawAnn(ctx,it,rr));const b=await new Promise(res=>c.toBlob(res,'image/jpeg',.9));ph.annBuf=b?await b.arrayBuffer():null;}
+  ph.thumb=await makeThumb(phBlob(ph));return r.g;}
+async function lensImport(item,files,mms,scene){const out=[];let noExif=0,portrait=0,narrow=0;
+  for(const file of files){const buf=await file.arrayBuffer();const f35=exifFocal35(buf);if(!f35)noExif++;
+    const img=await loadImg(new Blob([buf],{type:file.type||'image/jpeg'}));const W=img.naturalWidth,H=img.naturalHeight;if(H>W)portrait++;
+    const o={id:uid(),setupId:item.id,buf,type:file.type||'image/jpeg',f35,W,H,created:file.lastModified&&Date.now()-file.lastModified<36e5*24*365?file.lastModified:Date.now()};
+    await idb('orig','readwrite',st=>st.put(o));
+    for(const mm of mms){const ph={id:uid(),setupId:item.id,origId:o.id,lens:{sensor:vf.s.sensor,sq:+vf.s.sq,ar:+vf.s.ar,mm:+mm,ox:0,oy:0,lines:!!vf.s.lines},scene:scene||'',caption:'',created:Date.now()+out.length};
+      const g=await renderLensPhoto(ph,o,img);if(!g.cover)narrow++;await idb('photos','readwrite',st=>st.put(ph));out.push(ph);}}
+  item.photoCount=(item.photoCount||0)+out.length;touch(item);
+  const w=[noExif?'ohne Brennweiten-Info (26 mm angenommen)':'',portrait?'Hochformat – für Filmformate quer fotografieren':'',narrow?'Brennweite weiter als iPhone-Kamera – Ränder fehlen (0,5× nutzen)':''].filter(Boolean);
+  toast(`${out.length} Objektiv-Foto${out.length>1?'s':''} gespeichert${w.length?' · '+w.join(' · '):''}`);return out;}
+async function deleteOrphanOrigs(setupId){const phs=await getPhotos(setupId);const used=new Set(phs.map(p=>p.origId).filter(Boolean));
+  const keys=await idb('orig','readonly',s=>s.index('setup').getAllKeys(setupId));const dead=keys.filter(k=>!used.has(k));if(dead.length)await idb('orig','readwrite',st=>{dead.forEach(k=>st.delete(k));});}
+
+/* Auswahl-Sheet vor dem Foto */
+let ls=null;
+function lensSheetOpen(item){vf.s=vf.s||vfLoad();const s=vf.s;if(!Array.isArray(s.multi)||!s.multi.length)s.multi=[+s.mm||35];
+  const p=projectOf(item);const pf=projectFocals(p);const all=[...new Set([...pf,...FOCALS])].sort((a,b)=>a-b);const scs=scenesOf(item);
+  const fl=photoUI.filter[item.id];ls={item,scene:fl&&fl!=='all'&&fl!=='none'?fl:(item.lastScene||'')};
+  document.body.insertAdjacentHTML('beforeend',`<div id="ls" role="dialog" aria-label="Objektiv-Foto"><div class="ls-in">
+    <div class="sec-row"><h2 class="sec">Objektiv-Foto</h2><button class="x" data-ls="close" aria-label="Schließen">✕</button></div>
+    <div class="ls-grid">
+      <label class="fld"><span>Format</span><select id="lsSensor">${SENSORS.map(x=>`<option value="${x.id}"${x.id===s.sensor?' selected':''}>${esc(x.l)}</option>`).join('')}</select></label>
+      <label class="fld"><span>Optik</span><select id="lsSq">${SQUEEZE.map(q=>`<option value="${q}"${q==s.sq?' selected':''}>${q===1?'Sphärisch':q+'x Anamorph'}</option>`).join('')}</select></label>
+      <label class="fld"><span>Framelines</span><select id="lsAr">${ASPECTS.map(a=>`<option value="${a[0]}"${a[0]==s.ar?' selected':''}>${a[1]}</option>`).join('')}</select></label>
+      ${scs.length?`<label class="fld"><span>Szene</span><select id="lsScene"><option value="">–</option>${scs.map(sc=>`<option value="${sc.id}"${sc.id===ls.scene?' selected':''}>${esc(sceneLabel(sc))}</option>`).join('')}</select></label>`:''}</div>
+    <div class="fld"><span>Brennweiten – mehrere möglich, je eine Version pro Foto</span><div class="chips small" id="lsMm">${all.map(m=>`<button type="button" class="chip${pf.includes(m)?' own':''}" data-lsmm="${m}" aria-pressed="${s.multi.includes(m)}">${m}</button>`).join('')}</div></div>
+    <label class="btn primary block ls-shoot">📷 Foto aufnehmen<input class="vh" type="file" accept="image/*" capture="environment" id="lsCam"></label>
+    <div class="btns"><label class="btn">Aus Mediathek<input class="vh" type="file" accept="image/*" multiple id="lsLib"></label><button class="btn" data-ls="live">Live-Vorschau</button></div>
+    <p class="hint">Normale iPhone-Kamera, volle Qualität. Ausschnitt, Brennweite und Position kannst du danach in der Galerie unter <b>◫ Objektiv</b> ändern. Tipp: Motiv mittig, eher etwas weiter fotografieren.</p>
+  </div></div>`);
+  const el=$('#ls');
+  el.addEventListener('click',e=>{const m=e.target.closest('[data-lsmm]');if(m){const v=+m.dataset.lsmm;const i=s.multi.indexOf(v);if(i<0)s.multi.push(v);else if(s.multi.length>1)s.multi.splice(i,1);s.multi.sort((a,b)=>a-b);s.mm=s.multi[0];
+      el.querySelectorAll('[data-lsmm]').forEach(b=>b.setAttribute('aria-pressed',s.multi.includes(+b.dataset.lsmm)));vfSave();return;}
+    const b=e.target.closest('[data-ls]');if(!b)return;if(b.dataset.ls==='close')lensSheetClose();if(b.dataset.ls==='live'){const it=ls.item;lensSheetClose();vfOpen(it);}
+    if(e.target===el)lensSheetClose();});
+  el.addEventListener('change',async e=>{const t=e.target;
+    if(t.id==='lsSensor')s.sensor=t.value;else if(t.id==='lsSq')s.sq=+t.value;else if(t.id==='lsAr')s.ar=+t.value;else if(t.id==='lsScene'){ls.scene=t.value;ls.item.lastScene=t.value;touch(ls.item);}
+    vfSave();
+    if((t.id==='lsCam'||t.id==='lsLib')&&t.files&&t.files.length){const files=[...t.files];t.value='';const it=ls.item,sc=ls.scene;lensSheetClose();toast('Foto wird berechnet…');
+      try{await lensImport(it,files,s.multi.slice(),sc);}catch(err){toast('Fehler: '+err.message);}await flush();if(curItem()===it)fillPhotos(it);}});}
+function lensSheetClose(){const el=$('#ls');if(el)el.remove();ls=null;}
+
+/* Objektiv nachträglich ändern */
+let le=null;
+async function lensEditOpen(pid){const ph=photoCache.get(pid);if(!ph||!ph.origId){toast('Nur bei Objektiv-Fotos möglich');return;}
+  const o=await getOrig(ph.origId);if(!o){toast('Originalfoto fehlt');return;}
+  const img=await loadImg(new Blob([o.buf],{type:o.type}));o.W=img.naturalWidth;o.H=img.naturalHeight;
+  le={ph,o,img,L:clone(ph.lens),hf:origHfov(o)};const p=projectOf(vw.item||curItem());const all=[...new Set([...projectFocals(p),...FOCALS])].sort((a,b)=>a-b);
+  document.body.insertAdjacentHTML('beforeend',`<div id="le" role="dialog" aria-label="Objektiv ändern">
+    <div class="ed-top"><button class="ed-btn" data-le="cancel">Abbrechen</button><span class="t">Objektiv</span><button class="ed-btn pri" data-le="apply">Übernehmen</button></div>
+    <div class="ed-stage"><canvas id="leC"></canvas></div>
+    <div class="ed-bar">
+      <div class="ed-row" id="leMm">${all.map(m=>`<button class="ed-tool" data-lemm="${m}" aria-pressed="${m==le.L.mm}">${m}</button>`).join('')}</div>
+      <div class="ed-row"><select id="leSensor">${SENSORS.map(x=>`<option value="${x.id}"${x.id===le.L.sensor?' selected':''}>${esc(x.l)}</option>`).join('')}</select>
+        <select id="leSq">${SQUEEZE.map(q=>`<option value="${q}"${q==le.L.sq?' selected':''}>${q===1?'Sphärisch':q+'x'}</option>`).join('')}</select>
+        <select id="leAr">${ASPECTS.map(a=>`<option value="${a[0]}"${a[0]==le.L.ar?' selected':''}>${a[1]}</option>`).join('')}</select></div>
+      <div class="ed-row"><button class="ed-tool" data-le="center">⊕<small>Mitte</small></button><button class="ed-tool" data-le="version">＋<small>Als neue Version</small></button><span class="ed-hint" id="leHint">Rahmen verschieben: ziehen</span></div>
+    </div></div>`);
+  le.el=$('#le');le.c=$('#leC');
+  le.el.addEventListener('click',leClick);le.el.addEventListener('change',e=>{const t=e.target;if(t.id==='leSensor')le.L.sensor=t.value;if(t.id==='leSq')le.L.sq=+t.value;if(t.id==='leAr')le.L.ar=+t.value;leDraw();});
+  le.c.addEventListener('pointerdown',e=>{le.drag={x:e.clientX,y:e.clientY,ox:+le.L.ox||0,oy:+le.L.oy||0};try{le.c.setPointerCapture(e.pointerId);}catch{}});
+  le.c.addEventListener('pointermove',e=>{if(!le.drag)return;const k=(le.c.width/le.c.getBoundingClientRect().width)/le.r.w;le.L.ox=le.drag.ox+(e.clientX-le.drag.x)*k;le.L.oy=le.drag.oy+(e.clientY-le.drag.y)*k*(le.o.W/le.o.H);clampOff(le.L,le.o.W,le.o.H,le.hf);leDraw();});
+  const up=()=>{le&&(le.drag=null);};le.c.addEventListener('pointerup',up);le.c.addEventListener('pointercancel',up);
+  le.onR=()=>setTimeout(leDraw,200);window.addEventListener('resize',le.onR);leDraw();}
+function leDraw(){if(!le)return;const c=le.c,d=window.devicePixelRatio||1;const W=Math.round(c.parentElement.clientWidth*d),H=Math.round(c.parentElement.clientHeight*d);if(c.width!==W||c.height!==H){c.width=W;c.height=H;}
+  const ctx=c.getContext('2d');ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);const r=fitRect(le.o.W,le.o.H,W,H);le.r=r;ctx.drawImage(le.img,r.x,r.y,r.w,r.h);
+  clampOff(le.L,le.o.W,le.o.H,le.hf);const g=lensGeom(le.o.W,le.o.H,le.hf,le.L);const k=r.w/le.o.W;const cr={x:r.x+g.cx*k,y:r.y+g.cy*k,w:g.cw*k,h:g.ch*k};
+  ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(r.x,r.y,r.w,Math.max(0,cr.y-r.y));ctx.fillRect(r.x,cr.y+cr.h,r.w,Math.max(0,r.y+r.h-cr.y-cr.h));ctx.fillRect(r.x,cr.y,Math.max(0,cr.x-r.x),cr.h);ctx.fillRect(cr.x+cr.w,cr.y,Math.max(0,r.x+r.w-cr.x-cr.w),cr.h);
+  drawLines(ctx,cr,Math.max(1.5,d),le.L);ctx.strokeStyle='#f0b23a';ctx.lineWidth=2*d;ctx.strokeRect(cr.x,cr.y,cr.w,cr.h);
+  $('#leHint').textContent=g.cover?`${lensLabel(le.L,g)} · ziehen = verschieben`:'Weiter als das Foto – Ränder fehlen';}
+function leClose(){if(!le)return;window.removeEventListener('resize',le.onR);le.el.remove();le=null;}
+async function leSave(asNew){const {o,img}=le;let ph=le.ph;
+  if(asNew){ph={id:uid(),setupId:ph.setupId,origId:ph.origId,scene:ph.scene||'',caption:'',created:Date.now()};}
+  ph.lens=clone(le.L);await renderLensPhoto(ph,o,img);await idb('photos','readwrite',st=>st.put(ph));photoCache.set(ph.id,ph);
+  if(asNew){const it=vw.item||curItem();if(it){it.photoCount=(it.photoCount||0)+1;touch(it);}vw.dirty=true;leClose();vwClose();toast('Neue Version gespeichert');return;}
+  const x=vw.list.find(q=>q.pid===ph.id);if(x){const u=URL.createObjectURL(phBlob(ph));vw.urls.push(u);x.src=u;x.cap=ph.caption;const sl=$('#vwTrack').children[vw.list.indexOf(x)];if(sl){const im=sl.querySelector('img');if(im)im.src=u;}vwUpd();vwPanel();}
+  vw.dirty=true;leClose();toast('Objektiv geändert');}
+function leClick(e){const m=e.target.closest('[data-lemm]');if(m){le.L.mm=+m.dataset.lemm;le.el.querySelectorAll('[data-lemm]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.lemm==le.L.mm));leDraw();return;}
+  const b=e.target.closest('[data-le]');if(!b)return;const a=b.dataset.le;
+  if(a==='cancel')leClose();else if(a==='center'){le.L.ox=0;le.L.oy=0;leDraw();}
+  else if(a==='apply')leSave(false).catch(err=>toast('Fehler: '+err.message));else if(a==='version')leSave(true).catch(err=>toast('Fehler: '+err.message));}
 
 /* ---------- Zeichnen / Inpaint-Maske ---------- */
 const phBlob=ph=>new Blob([ph.annBuf||ph.buf],{type:ph.annBuf?'image/jpeg':ph.type});
@@ -1024,16 +1139,18 @@ function buildCSV(it){const rows=[CSV_HEAD];
 function bufToB64(buf){const b=new Uint8Array(buf);let s='';for(let i=0;i<b.length;i+=0x8000)s+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000));return btoa(s);}
 function b64ToBuf(b64){const s=atob(b64);const b=new Uint8Array(s.length);for(let i=0;i<s.length;i++)b[i]=s.charCodeAt(i);return b.buffer;}
 async function buildBackup(p){const items=[p,...locsOf(p)];for(const d of kids(p.id,'day')){items.push(d);items.push(...kids(d.id,'setup'));}
-  const photos=[],audio=[];
+  const photos=[],audio=[],origs=[];
   for(const s of items.filter(i=>i.type==='setup'||i.type==='loc')){
-    for(const ph of await getPhotos(s.id))photos.push({id:ph.id,setupId:ph.setupId,caption:ph.caption,scene:ph.scene||'',meta:ph.meta||null,ann:ph.ann||null,mask:ph.mask||null,annData:ph.annBuf?bufToB64(ph.annBuf):null,created:ph.created,type:ph.type,data:bufToB64(ph.buf)});
+    for(const ph of await getPhotos(s.id))photos.push({id:ph.id,setupId:ph.setupId,caption:ph.caption,scene:ph.scene||'',meta:ph.meta||null,origId:ph.origId||null,lens:ph.lens||null,autoCap:ph.autoCap||'',ann:ph.ann||null,mask:ph.mask||null,annData:ph.annBuf?bufToB64(ph.annBuf):null,created:ph.created,type:ph.type,data:bufToB64(ph.buf)});
+    for(const o of await idb('orig','readonly',st=>st.index('setup').getAll(s.id)))origs.push({id:o.id,setupId:o.setupId,f35:o.f35||null,W:o.W,H:o.H,created:o.created,type:o.type,data:bufToB64(o.buf)});
     for(const a of await getAudio(s.id))audio.push({id:a.id,setupId:a.setupId,created:a.created,type:a.type,data:bufToB64(a.buf)});}
-  return JSON.stringify({app:'vfx-setlog',version:1,exported:new Date().toISOString(),items,photos,audio});}
+  return JSON.stringify({app:'vfx-setlog',version:1,exported:new Date().toISOString(),items,photos,audio,origs});}
 async function importBackup(file){if(!file)return;
   try{const j=JSON.parse(await file.text());if(j.app!=='vfx-setlog'||!Array.isArray(j.items))throw new Error('Keine Setlog-Backup-Datei.');
-    const ph=(j.photos||[]).map(x=>({id:x.id,setupId:x.setupId,caption:x.caption||'',scene:x.scene||'',meta:x.meta||null,ann:x.ann||null,mask:x.mask||null,annBuf:x.annData?b64ToBuf(x.annData):null,created:x.created||Date.now(),type:x.type||'image/jpeg',buf:b64ToBuf(x.data)}));
+    const ph=(j.photos||[]).map(x=>({id:x.id,setupId:x.setupId,caption:x.caption||'',scene:x.scene||'',meta:x.meta||null,origId:x.origId||null,lens:x.lens||null,autoCap:x.autoCap||'',ann:x.ann||null,mask:x.mask||null,annBuf:x.annData?b64ToBuf(x.annData):null,created:x.created||Date.now(),type:x.type||'image/jpeg',buf:b64ToBuf(x.data)}));
     const au=(j.audio||[]).map(x=>({id:x.id,setupId:x.setupId,created:x.created||Date.now(),type:x.type||'audio/mp4',buf:b64ToBuf(x.data)}));
-    await txn(['items','photos','audio'],'readwrite',t=>{const si=t.objectStore('items'),sp=t.objectStore('photos'),sa=t.objectStore('audio');j.items.forEach(i=>si.put(i));ph.forEach(x=>sp.put(x));au.forEach(x=>sa.put(x));});
+    const og=(j.origs||[]).map(x=>({id:x.id,setupId:x.setupId,f35:x.f35,W:x.W,H:x.H,created:x.created,type:x.type||'image/jpeg',buf:b64ToBuf(x.data)}));
+    await txn(['items','photos','audio','orig'],'readwrite',t=>{const si=t.objectStore('items'),sp=t.objectStore('photos'),sa=t.objectStore('audio');og.forEach(x=>t.objectStore('orig').put(x));j.items.forEach(i=>si.put(i));ph.forEach(x=>sp.put(x));au.forEach(x=>sa.put(x));});
     j.items.forEach(i=>S.set(i.id,i));const p=j.items.find(i=>i.type==='project');
     toast(`Backup geladen: ${p?p.name:''} (${ph.length} Fotos)`);rerender();}
   catch(e){toast('Import fehlgeschlagen: '+e.message);}}
@@ -1063,8 +1180,8 @@ function vwUpd(){const tr=$('#vwTrack');const i=Math.max(0,Math.min(vw.list.leng
   $('#vwCount').textContent=`${i+1} / ${vw.list.length}`;$('#vwCap').textContent=vw.list[i]?vw.list[i].cap||'':'';vw.i=i;if(vw.pi!==i){vw.pi=i;vwPanel();}}
 function vwPanel(){const bot=$('#vwBot');const x=vw.list[vw.i];if(!x||!x.pid||!vw.item){bot.hidden=true;bot.innerHTML='';return;}
   const ph=photoCache.get(x.pid);const scs=scenesOf(vw.item);bot.hidden=false;
-  bot.innerHTML=`${scs.length?`<div class="vw-chips">${[...scs.map(sc=>[sc.id,sceneLabel(sc)]),['','Ohne Szene']].map(([k,lb])=>`<button type="button" class="chip" data-vwscene="${k}" aria-pressed="${((ph&&ph.scene)||'')===k}">${esc(lb)}</button>`).join('')}</div>`:''}<div class="vw-row"><input id="vwCapIn" value="${esc(ph?ph.caption:'')}" placeholder="Beschriftung" autocomplete="off"><button type="button" class="vw-draw" data-vwdraw="1">✎ Zeichnen</button></div>`;}
-$('#vwBot').addEventListener('click',async e=>{if(e.target.closest('[data-vwdraw]')){const x=vw.list[vw.i];if(x&&x.pid)edOpen(x.pid);return;}const b=e.target.closest('[data-vwscene]');if(!b)return;const x=vw.list[vw.i];if(!x)return;
+  bot.innerHTML=`${scs.length?`<div class="vw-chips">${[...scs.map(sc=>[sc.id,sceneLabel(sc)]),['','Ohne Szene']].map(([k,lb])=>`<button type="button" class="chip" data-vwscene="${k}" aria-pressed="${((ph&&ph.scene)||'')===k}">${esc(lb)}</button>`).join('')}</div>`:''}<div class="vw-row"><input id="vwCapIn" value="${esc(ph?ph.caption:'')}" placeholder="Beschriftung" autocomplete="off">${ph&&ph.origId?'<button type="button" class="vw-draw" data-vwlens="1">◫ Objektiv</button>':''}<button type="button" class="vw-draw" data-vwdraw="1">✎ Zeichnen</button></div>`;}
+$('#vwBot').addEventListener('click',async e=>{if(e.target.closest('[data-vwlens]')){const x=vw.list[vw.i];if(x&&x.pid)lensEditOpen(x.pid);return;}if(e.target.closest('[data-vwdraw]')){const x=vw.list[vw.i];if(x&&x.pid)edOpen(x.pid);return;}const b=e.target.closest('[data-vwscene]');if(!b)return;const x=vw.list[vw.i];if(!x)return;
   await setPhotoScene([x.pid],b.dataset.vwscene);vw.dirty=true;vwPanel();});
 $('#vwBot').addEventListener('input',e=>{if(e.target.id!=='vwCapIn')return;const x=vw.list[vw.i];if(!x)return;x.cap=e.target.value;$('#vwCap').textContent=x.cap;saveCaption(x.pid,x.cap);vw.dirty=true;});
 function vwClose(){$('#viewer').hidden=true;$('#vwTrack').innerHTML='';vw.urls.forEach(u=>URL.revokeObjectURL(u));vw.urls=[];$('#vwBot').hidden=true;if(!vf.on)document.body.classList.remove('vf-open');if(vw.dirty&&vw.item&&!vf.on)setTimeout(()=>fillPhotos(vw.item),450);vw.dirty=false;}
@@ -1090,8 +1207,8 @@ function arm(b){if(b.dataset.armed)return true;b.dataset.armed='1';b.dataset.txt
   setTimeout(()=>{if(b.isConnected&&b.dataset.armed){delete b.dataset.armed;b.classList.remove('armed');b.textContent=b.dataset.txt;}},3500);return false;}
 async function deleteItem(id){const ids=[];(function walk(x){ids.push(x);[...S.values()].filter(i=>i.parent===x).forEach(i=>walk(i.id));})(id);
   const sids=ids.filter(i=>S.get(i)&&(S.get(i).type==='setup'||S.get(i).type==='loc'));const pk=[],ak=[];
-  for(const sid of sids){pk.push(...await idb('photos','readonly',s=>s.index('setup').getAllKeys(sid)));ak.push(...await idb('audio','readonly',s=>s.index('setup').getAllKeys(sid)));}
-  await txn(['items','photos','audio'],'readwrite',t=>{ids.forEach(i=>t.objectStore('items').delete(i));pk.forEach(k=>t.objectStore('photos').delete(k));ak.forEach(k=>t.objectStore('audio').delete(k));});
+  const ok_=[];for(const sid of sids){ok_.push(...await idb('orig','readonly',s=>s.index('setup').getAllKeys(sid)));pk.push(...await idb('photos','readonly',s=>s.index('setup').getAllKeys(sid)));ak.push(...await idb('audio','readonly',s=>s.index('setup').getAllKeys(sid)));}
+  await txn(['items','photos','audio','orig'],'readwrite',t=>{ok_.forEach(k=>t.objectStore('orig').delete(k));ids.forEach(i=>t.objectStore('items').delete(i));pk.forEach(k=>t.objectStore('photos').delete(k));ak.forEach(k=>t.objectStore('audio').delete(k));});
   ids.forEach(i=>{S.delete(i);pending.delete(i);});}
 
 app.addEventListener('click',async e=>{
@@ -1112,11 +1229,12 @@ app.addEventListener('click',async e=>{
     case 'phFilter':{photoUI.filter[it.id]=b.dataset.val;fillPhotos(it);break;}
     case 'selMode':{photoUI.sel=photoUI.sel?null:new Set();fillPhotos(it);break;}
     case 'assignSel':{if(!photoUI.sel||!photoUI.sel.size){toast('Erst Fotos antippen');break;}const n=await setPhotoScene([...photoUI.sel],b.dataset.val);const sc=scenesOf(it).find(x=>x.id===b.dataset.val);photoUI.sel=null;await fillPhotos(it);toast(`${n} Foto${n>1?'s':''} → ${sceneLabel(sc)}`);break;}
-    case 'delSel':{if(!photoUI.sel||!photoUI.sel.size)break;const ids=[...photoUI.sel];await idb('photos','readwrite',st=>{ids.forEach(i=>st.delete(i));});photoUI.sel=null;await fillPhotos(it);toast(`${ids.length} gelöscht`);break;}
+    case 'delSel':{if(!photoUI.sel||!photoUI.sel.size)break;const ids=[...photoUI.sel];await idb('photos','readwrite',st=>{ids.forEach(i=>st.delete(i));});await deleteOrphanOrigs(it.id);photoUI.sel=null;await fillPhotos(it);toast(`${ids.length} gelöscht`);break;}
     case 'addScene':{const sc=(it.scenes=it.scenes||[]);const last=sc[sc.length-1];const nn=last&&/^\d+$/.test(last.n)?String(+last.n+1):'';sc.push({id:uid(),n:nn,name:''});touch(it);rerender();const ins=document.querySelectorAll('.scn input');const t=ins[ins.length-(nn?1:2)];if(t)t.focus();break;}
     case 'delScene':{it.scenes.splice(+b.dataset.i,1);touch(it);rerender();break;}
     case 'setKind':{it.kind=b.dataset.val;touch(it);rerender();break;}
     case 'finder':{await flush();vfOpen(S.get(b.dataset.id));break;}
+    case 'lensSheet':{await flush();lensSheetOpen(S.get(b.dataset.id));break;}
     case 'gps':{if(!navigator.geolocation){toast('Standort nicht verfügbar');break;}b.textContent='◎ Suche Position…';
       navigator.geolocation.getCurrentPosition(pos=>{it.gps=pos.coords.latitude.toFixed(6)+', '+pos.coords.longitude.toFixed(6);touch(it);rerender();toast(`Position übernommen (±${Math.round(pos.coords.accuracy)} m)`);},
         err=>{b.textContent='◎ Position übernehmen';toast('Standort: '+(err.code===1?'nicht erlaubt – Einstellungen → Datenschutz → Ortungsdienste → Safari-Websites':err.message));},{enableHighAccuracy:true,timeout:15000,maximumAge:30000});break;}
@@ -1133,7 +1251,7 @@ app.addEventListener('click',async e=>{
     case 'delMemo':{const m=it.memos.splice(+b.dataset.i,1)[0];if(m&&m.audio)await idb('audio','readwrite',s=>s.delete(m.id));touch(it);rerender();break;}
     case 'rec':await toggleRec(it,b);break;
     case 'recTake':{const tk=it.takes[+b.dataset.i];await toggleRec(it,b,tk&&tk.n);break;}
-    case 'delPhoto':{await idb('photos','readwrite',s=>s.delete(b.dataset.pid));await fillPhotos(it);break;}
+    case 'delPhoto':{await idb('photos','readwrite',s=>s.delete(b.dataset.pid));await deleteOrphanOrigs(it.id);await fillPhotos(it);break;}
     case 'del':{const x=S.get(b.dataset.id);await deleteItem(x.id);nav.pop();toast('Gelöscht');render();window.scrollTo(0,0);break;}
     case 'report':go('report',b.dataset.id);break;
     case 'print':window.print();break;

@@ -1,5 +1,5 @@
 // VFX Setlog – offline cache. Bump VERSION when files change.
-const VERSION = 'setlog-1.5.0';
+const VERSION = 'setlog-1.6.0';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
