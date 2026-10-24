@@ -207,7 +207,7 @@ body.vf-open{overflow:hidden}
 .vf-top{display:flex;gap:6px;align-items:center;padding:6px 8px;overflow-x:auto;flex:none}
 .vf-top select{font:inherit;font-size:14px;color:#eee;background:#1d2024;border:1px solid #333;border-radius:8px;min-height:38px;padding:0 8px;max-width:46vw;flex:0 1 auto;min-width:0}
 .vf-ic{flex:none;width:40px;height:40px;border-radius:20px;border:1px solid #333;background:#1d2024;color:#eee;font-size:18px;cursor:pointer}
-.vf-stage{position:relative;flex:1;min-height:0}
+.vf-stage{position:relative;flex:1;min-height:0;overflow:hidden}
 #vfCanvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .vf-info{position:absolute;left:8px;right:8px;bottom:6px;font-size:11px;color:#f0b23a;text-shadow:0 1px 2px #000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
 .vf-warn{position:absolute;left:8px;right:8px;top:8px;background:rgba(179,38,30,.88);color:#fff;font-size:13px;padding:6px 10px;border-radius:8px;text-align:center}
@@ -266,13 +266,15 @@ window.addEventListener('unhandledrejection',function(e){var r=e.reason;window._
 </script>
 <script>
 'use strict';
-const APP_VERSION='1.6.0';
+const APP_VERSION='1.6.1';
 /* Kamera/Mikro offen halten: iOS fragt bei jedem neuen Zugriff erneut – Streams werden daher wiederverwendet und erst nach Leerlauf freigegeben */
 const KEEP_MS=3*60000;const media={cam:null,camKey:'',camT:0,mic:null,micT:0};
-const liveStream=s=>!!(s&&s.getTracks().some(t=>t.readyState==='live'));
+const liveStream=s=>!!(s&&s.getTracks().some(t=>t.readyState==='live'&&!t.muted&&t.enabled));
+// Nach Nutzung der nativen iPhone-Kamera ist ein geparkter Stream oft tot → dann neu anfordern
+document.addEventListener('click',e=>{const l=e.target.closest('label');if(l&&l.querySelector('input[capture]')){media.nativeUsed=Date.now();}},true);
 async function getCam(video,force){clearTimeout(media.camT);const key=JSON.stringify(video);
-  if(!force&&liveStream(media.cam)&&media.camKey===key)return media.cam;releaseCam();
-  media.cam=await navigator.mediaDevices.getUserMedia({audio:false,video});media.camKey=key;return media.cam;}
+  if(!force&&liveStream(media.cam)&&media.camKey===key&&!(media.nativeUsed>(media.camAt||0)))return media.cam;releaseCam();
+  media.cam=await navigator.mediaDevices.getUserMedia({audio:false,video});media.camKey=key;media.camAt=Date.now();return media.cam;}
 function releaseCam(){clearTimeout(media.camT);if(media.cam)media.cam.getTracks().forEach(t=>t.stop());media.cam=null;}
 function parkCam(){clearTimeout(media.camT);media.camT=setTimeout(releaseCam,KEEP_MS);}
 async function getMic(){clearTimeout(media.micT);if(liveStream(media.mic))return media.mic;media.mic=await navigator.mediaDevices.getUserMedia({audio:true});return media.mic;}
@@ -717,6 +719,7 @@ function finderHTML(p){const pf=projectFocals(p);const all=[...new Set([...pf,..
     <label class="fld"><span>Kalibrierung: horizontaler Bildwinkel dieser iPhone-Kamera (°)</span><input id="vfHf" type="number" inputmode="decimal" step="0.1" value="${curHfov()}"></label>
     <p class="hint">iPhone 12 Hauptkamera ≈ 67°, Ultra-Weitwinkel ≈ 106°. Prüfen: Objekt mit Breite B aus Abstand D bildfüllend → 2·atan(B/2D).</p>
     <div class="btns"><button class="btn" data-vf="lines">Drittel-Linien: ${vf.s.lines?'an':'aus'}</button><p class="hint">Live-Vorschau nutzt das Videobild – der Bildwinkel kann je nach iPhone-Kamera abweichen. Maßgeblich ist <b>HQ</b> bzw. Objektiv-Foto. Live-Sucher nutzt das Videobild (Full HD). 4K = schärfer, aber mehr Speicher/Wärme. Beste Qualität: <b>HQ</b> neben dem Auslöser (echtes iPhone-Foto, gleicher Ausschnitt).</p><button class="btn" data-vf="hires">4K-Kamerastream: ${vf.s.hires?'an':'aus'}</button><button class="btn" data-vf="compass">${vf.heading!=null?'Kompass an':'Kompass aktivieren'}</button></div>
+    <button class="btn block" data-vf="restart">Kamera neu starten</button>
     <button class="btn primary block" data-vf="setclose">Fertig</button></div>
   </div>`;}
 async function vfOpen(item){if(vf.on)return;stopRec();const pb=$('#photos');if(pb){pb.innerHTML='';objURLs.forEach(u=>URL.revokeObjectURL(u));objURLs=[];}const p=projectOf(item);const fl=photoUI.filter[item.id];vf={on:true,item,s:vfLoad(),heading:vf.heading??null,shots:0,sceneId:fl&&fl!=='all'&&fl!=='none'?fl:(item.lastScene||'')};
@@ -730,7 +733,7 @@ async function vfStart(force){vfStop(true);
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){vfWarn('Kamera wird in diesem Browser nicht unterstützt. App vom Home-Bildschirm in Safari öffnen.');return;}
   const hi=!!vf.s.hires;const v={width:{ideal:hi?3840:1920},height:{ideal:hi?2160:1080}};if(vf.s.dev)v.deviceId={exact:vf.s.dev};else v.facingMode={ideal:'environment'};
   try{vf.stream=await getCam(v,force);}
-  catch(e){if(vf.s.dev){vf.s.dev='';return vfStart(force);}vfWarn('Kein Kamerazugriff: '+(e.message||e.name)+'. Einstellungen → Safari → Kamera → Erlauben.');return;}
+  catch(e){if(vf.s.dev){vf.s.dev='';return vfStart(force);}const w=$('#vfWarn');if(w){w.hidden=false;w.innerHTML=esc('Kamera: '+(e.name||'')+' '+(e.message||''))+'<button data-vf="restart">Neu starten</button>';}vf.camErr=true;return;}
   vf.video.srcObject=vf.stream;vf.video.muted=true;vf.video.setAttribute('playsinline','');
   vf.video.onloadedmetadata=()=>{vf.video.play().catch(()=>{});};try{await vf.video.play();}catch{}
   vf.started=Date.now();vf.blackSince=0;vf.retried=vf.retried||0;
@@ -744,22 +747,27 @@ function vfClose(){if(!vf.on)return;vf.on=false;vfStop();window.removeEventListe
   rerender();if(n)toast(`${n} Sucher-Foto${n>1?'s':''} gespeichert`);}
 function vfSize(){const c=vf.canvas;if(!c)return false;const st=c.parentElement;const d=window.devicePixelRatio||1;const w=Math.round(st.clientWidth*d),h=Math.round(st.clientHeight*d);if(w&&h&&(c.width!==w||c.height!==h)){c.width=w;c.height=h;return true;}return false;}
 function vfWarn(t){const w=$('#vfWarn');if(!w)return;w.textContent=t||'';w.hidden=!t;}
-function vfLoop(){if(!vf.on)return;vfSize();const v=vf.video,c=vf.canvas,ctx=c.getContext('2d');const W=v.videoWidth,H=v.videoHeight;
-  if(W&&H&&c.width){const g=vfGeom(W,H);const r=fitRect(g.cw,g.ch,c.width,c.height);ctx.fillStyle='#000';ctx.fillRect(0,0,c.width,c.height);
-    drawCrop(ctx,v,W,H,g,r.x,r.y,r.w,r.h);drawLines(ctx,r,Math.max(1.5,(window.devicePixelRatio||1)));
-    const hd=vfHeading();const info=vfLabel(g)+(hd!=null?` · ${deg(hd)}`:'');if(vf.lastInfo!==info){$('#vfInfo').textContent=info;vf.lastInfo=info;}
+function vfLoop(){if(!vf.on)return;vfSize();const v=vf.video,c=vf.canvas,ctx=c.getContext('2d',{willReadFrequently:true});const W=v.videoWidth,H=v.videoHeight;
+  if(W&&H&&c.width){const g=vfGeom(W,H);const r=fitRect(g.cw,g.ch,c.width,c.height);
+    if(vf.css){/* Kompatibilitätsmodus: Video-Element selbst zeigen, per CSS auf den Ausschnitt skaliert; Canvas nur für Maske + Framelines */
+      const d=window.devicePixelRatio||1,k=r.w/g.cw;const st=v.style;st.inset='auto';st.left='0';st.top='0';st.objectFit='fill';st.width=(W*k/d)+'px';st.height=(H*k/d)+'px';st.transformOrigin='0 0';st.transform=`translate(${(r.x-g.cx*k)/d}px,${(r.y-g.cy*k)/d}px)`;
+      ctx.clearRect(0,0,c.width,c.height);ctx.fillStyle='#000';ctx.fillRect(0,0,c.width,r.y);ctx.fillRect(0,r.y+r.h,c.width,c.height-r.y-r.h);ctx.fillRect(0,r.y,r.x,r.h);ctx.fillRect(r.x+r.w,r.y,c.width-r.x-r.w,r.h);
+      if(!g.cover){ctx.fillStyle='rgba(0,0,0,.0)';}
+      drawLines(ctx,r,Math.max(1.5,d));}
+    else{ctx.fillStyle='#000';ctx.fillRect(0,0,c.width,c.height);drawCrop(ctx,v,W,H,g,r.x,r.y,r.w,r.h);drawLines(ctx,r,Math.max(1.5,(window.devicePixelRatio||1)));vfBlackCheck(ctx,r);}
+    const hd=vfHeading();const info=vfLabel(g)+(hd!=null?` · ${deg(hd)}`:'')+(vf.css?' · Kompatibilitätsmodus':'');if(vf.lastInfo!==info){$('#vfInfo').textContent=info;vf.lastInfo=info;}
     const portrait=H>W&&(g.cw>g.ch);
-    const warn=portrait?'iPhone quer halten (Ausrichtungssperre aus).':!g.cover?'Weiter als die iPhone-Kamera – Ränder fehlen. Ultra-Weitwinkel wählen (⚙), falls vorhanden.':g.res<700?`Starker Crop (${g.res}px) – Bild wird weich.`:'';
-    if(!vf.camErr&&vf.lastWarn!==warn){vfWarn(warn);vf.lastWarn=warn;}
-    vfBlackCheck(ctx,r);}
+    const warn=portrait?'iPhone quer halten (Ausrichtungssperre aus).':!g.cover?'Weiter als die iPhone-Kamera – Ränder fehlen.':g.res<700?`Starker Crop (${g.res}px) – Bild wird weich.`:'';
+    if(!vf.camErr&&vf.lastWarn!==warn){vfWarn(warn);vf.lastWarn=warn;}}
   else if(vf.stream&&vf.started&&Date.now()-vf.started>3000)vfCamProblem();
   vf.raf=requestAnimationFrame(vfLoop);}
 function vfBlackCheck(ctx,r){const now=Date.now();if(now-(vf.lastBC||0)<700)return;vf.lastBC=now;
   let dark=true;try{const d=ctx.getImageData(Math.round(r.x+r.w*.3),Math.round(r.y+r.h*.3),Math.max(1,Math.round(r.w*.4)),Math.max(1,Math.round(r.h*.4))).data;
     let s=0,n=0;for(let i=0;i<d.length;i+=64){s+=d[i]+d[i+1]+d[i+2];n++;}dark=n>0&&s/n<6;}catch{dark=false;}
-  if(dark){vf.blackSince=vf.blackSince||now;if(now-vf.blackSince>2500)vfCamProblem();}else{vf.blackSince=0;if(vf.camErr){vf.camErr=false;vf.lastWarn=null;vfWarn('');}}}
+  if(dark){vf.blackSince=vf.blackSince||now;if(now-vf.blackSince>2000){vf.css=true;vf.blackSince=0;vf.lastInfo=null;}}else{vf.blackSince=0;if(vf.camErr){vf.camErr=false;vf.lastWarn=null;vfWarn('');}}}
+function vfFrameDark(){try{const v=vf.video;const c=document.createElement('canvas');c.width=32;c.height=18;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(v,0,0,32,18);const d=x.getImageData(0,0,32,18).data;let s=0;for(let i=0;i<d.length;i+=4)s+=d[i]+d[i+1]+d[i+2];return s/(d.length/4)<6;}catch{return false;}}
 function vfCamProblem(){if(vf.camErr)return;vf.camErr=true;try{vf.video.play();}catch{}
-  const w=$('#vfWarn');if(!w)return;w.hidden=false;w.innerHTML='Kamerabild bleibt schwarz.<button data-vf="restart">Neu starten</button>';}
+  const w=$('#vfWarn');if(!w)return;w.hidden=false;w.innerHTML='Kein Kamerabild.<button data-vf="restart">Neu starten</button>';}
 function vfScrollFocal(){const b=document.querySelector(`.vf-mm[aria-pressed="true"]`);if(b)try{b.scrollIntoView({inline:'center',block:'nearest'});}catch{}}
 function vfSetMm(m){vf.s.mm=+m;document.querySelectorAll('.vf-mm').forEach(b=>b.setAttribute('aria-pressed',b.dataset.mm==m));const i=$('#vfMm');if(i)i.value=m;vfSave();}
 async function vfCompose(src,W,H,hfo,extra){const g=vfGeom(W,H,hfo);const outW=Math.round(Math.min(4000,Math.max(1600,Math.min(g.cw,W))));const outH=Math.round(outW*g.ch/g.cw);const bar=Math.round(outW*0.032);
@@ -776,6 +784,7 @@ async function vfStore(r){const item=vf.item;if(!r.blob){toast('Foto fehlgeschla
   const u=URL.createObjectURL(r.blob);(vf.urls=vf.urls||[]).push({src:u,cap:ph.caption});const th=$('#vfThumb');if(th){th.style.backgroundImage=`url(${u})`;}
   const vc=$('#vfCount');if(vc)vc.textContent=vf.shots+' neu';}
 async function vfShoot(){const v=vf.video;const W=v.videoWidth,H=v.videoHeight;if(!W){toast('Kamera liefert noch kein Bild');vfCamProblem();return;}
+  if(vf.css&&vfFrameDark()){toast('Live-Auslöser liefert auf diesem iPhone kein Bild – bitte HQ nutzen');return;}
   const f=$('#vfFlash');if(f){f.hidden=false;setTimeout(()=>f.hidden=true,120);}
   const r=await vfCompose(v,W,H,null,null);await vfStore(r);}
 /* HQ: echtes iPhone-Foto (volle Auflösung, Apple-Bildverarbeitung), danach gleicher Ausschnitt + Framelines. Bildwinkel aus EXIF (35mm-Äquivalent). */
@@ -799,7 +808,7 @@ async function vfCompass(btn){
 function vfClick(e){if(e.target.closest('#vfThumb')&&vf.urls&&vf.urls.length){vwOpen(vf.urls,vf.urls.length-1,null);return;}const mmb=e.target.closest('[data-mm]');if(mmb){vfSetMm(mmb.dataset.mm);return;}
   const b=e.target.closest('[data-vf]');if(!b)return;const a=b.dataset.vf;
   if(a==='hq'){vf.hqPending=true;setTimeout(()=>{vf.hqPending=false;},120000);return;}
-  if(a==='restart'){vf.camErr=false;vf.lastWarn=null;vfWarn('');vf.started=0;vfStart(true);return;}
+  if(a==='restart'){vf.camErr=false;vf.css=false;vf.lastWarn=null;vfWarn('');vf.started=0;const v=vf.video;if(v)v.removeAttribute('style');vfStart(true);$('#vfSet').hidden=true;return;}
   if(a==='close')vfClose();else if(a==='shoot')vfShoot().catch(err=>toast('Fehler: '+err.message));
   else if(a==='set')$('#vfSet').hidden=false;else if(a==='setclose')$('#vfSet').hidden=true;
   else if(a==='lines'){vf.s.lines=!vf.s.lines;b.textContent='Drittel-Linien: '+(vf.s.lines?'an':'aus');vfSave();}
