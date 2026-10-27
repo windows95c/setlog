@@ -180,7 +180,10 @@ pre.box{margin:0;max-height:220px;overflow:auto;background:var(--surface2);borde
 .r-meta dt{color:#555}.r-meta dd{margin:0}
 .r-day{margin-top:18px;display:flex;flex-direction:column;gap:10px}
 .r-sub{margin:0;color:#444}
-.r-setup{border:1px solid #bbb;border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:6px;break-inside:avoid;page-break-inside:avoid}
+.r-setup{border:1px solid #bbb;border-radius:6px;padding:10px;display:block}
+.r-setup>*+*{margin-top:6px}
+.r-sh{break-after:avoid;page-break-after:avoid}
+.report table{break-inside:avoid;page-break-inside:avoid}
 .r-sh{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
 .r-id{font-size:17px;font-weight:800}
 .r-setup p{margin:0}
@@ -191,8 +194,12 @@ pre.box{margin:0;max-height:220px;overflow:auto;background:var(--surface2);borde
 .report th{background:#f0f0f0;font-weight:650;white-space:nowrap}
 .r-refs{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px}
 .r-refs .off{color:#999}
-.r-photos{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
-.r-photos figure{margin:0}.r-photos img{width:100%;border-radius:3px}
+.r-photos{display:block;font-size:0;margin-top:8px}
+.r-photos figure{display:inline-block;vertical-align:top;margin:0 1% 10px 0;font-size:13px;break-inside:avoid;page-break-inside:avoid}
+.r-photos figure img{display:block;width:100%;height:auto;max-height:235mm;object-fit:contain;border-radius:3px;background:#eee}
+.report.ps-L .r-photos figure{width:99%}
+.report.ps-M .r-photos figure{width:48.5%}
+.report.ps-S .r-photos figure{width:32%}
 .r-photos figcaption{font-size:10.5px;color:#444}
 .r-memo{font-size:12px;color:#333;border-left:3px solid #ccc;padding-left:8px}
 .r-foot{margin-top:16px;color:#777;font-size:10.5px}
@@ -240,6 +247,7 @@ body.vf-open{overflow:hidden}
 }
 @media print{
   @page{margin:12mm}
+  .report img{image-rendering:auto}
   body{background:#fff;padding:0}
   #bar,.noprint,#toast{display:none!important}
   main{max-width:none;padding:0}
@@ -266,7 +274,7 @@ window.addEventListener('unhandledrejection',function(e){var r=e.reason;window._
 </script>
 <script>
 'use strict';
-const APP_VERSION='1.6.1';
+const APP_VERSION='1.6.2';
 /* Kamera/Mikro offen halten: iOS fragt bei jedem neuen Zugriff erneut – Streams werden daher wiederverwendet und erst nach Leerlauf freigegeben */
 const KEEP_MS=3*60000;const media={cam:null,camKey:'',camT:0,mic:null,micT:0};
 const liveStream=s=>!!(s&&s.getTracks().some(t=>t.readyState==='live'&&!t.muted&&t.enabled));
@@ -1008,13 +1016,15 @@ function edClick(e){const t=e.target.closest('[data-tool],[data-color],[data-w],
 }
 
 /* ---------- Report ---------- */
+function repSize(){try{return localStorage.getItem('setlog-psize')||'M';}catch{return 'M';}}
 function vReport(cur){
   const it=S.get(cur.id);const p=projectOf(it);const days=it.type==='project'?kids(p.id,'day'):it.type==='day'?[it]:[];const locs=it.type==='project'?locsOf(p):it.type==='loc'?[it]:[];
   const meta=[['Prod.-Nr.',p.prodnr],['Kunde',p.client],['Produktion',p.production],['VFX Supervisor',p.sup],['Regie',p.director],['DOP',p.dop],['Projekt-FPS',p.fps]].filter(x=>x[1]);
   return {title:'Report',sub:it.type==='project'?p.name:it.type==='loc'?`${it.name} · ${p.name}`:`DT ${pad2(it.dt)} · ${p.name}`,html:`
-  <div class="toolbar noprint"><button class="btn primary block" data-act="print">Drucken / als PDF sichern</button>
+  <div class="toolbar noprint"><div class="sec-row"><span class="hint">Fotogröße im PDF</span><div class="chips small">${[['L','Groß · 1'],['M','Mittel · 2'],['S','Klein · 3']].map(([k,l])=>`<button type="button" class="chip" data-act="psize" data-val="${k}" aria-pressed="${repSize()===k}">${l}</button>`).join('')}</div></div>
+  <button class="btn primary block" data-act="print">Drucken / als PDF sichern</button>
   <p class="hint">Im Druckdialog oben auf <b>Teilen</b> tippen → <b>In Dateien sichern</b>, Mail oder AirDrop.</p></div>
-  <article class="report">
+  <article class="report ps-${repSize()}">
     <div class="r-kicker mono">${it.type==='loc'?'TECH RECCE / LOCATION':'VFX SET REPORT'}</div><h1>${esc(p.name)}</h1>
     <dl class="r-meta">${meta.map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
     ${days.map(d=>{const ss=kids(d.id,'setup');return `<section class="r-day"><div><h2>DT ${esc(pad2(d.dt))} · ${esc(fmtDate(d.date))}</h2><p class="r-sub">${esc([d.location,(d.weather||[]).join(', ')].filter(Boolean).join(' · '))}</p></div>${d.notes?`<p>${nl(d.notes)}</p>`:''}${ss.map(rSetup).join('')||'<p>Keine Setups.</p>'}</section>`;}).join('')}
@@ -1263,7 +1273,11 @@ app.addEventListener('click',async e=>{
     case 'delPhoto':{await idb('photos','readwrite',s=>s.delete(b.dataset.pid));await deleteOrphanOrigs(it.id);await fillPhotos(it);break;}
     case 'del':{const x=S.get(b.dataset.id);await deleteItem(x.id);nav.pop();toast('Gelöscht');render();window.scrollTo(0,0);break;}
     case 'report':go('report',b.dataset.id);break;
-    case 'print':window.print();break;
+    case 'psize':{try{localStorage.setItem('setlog-psize',b.dataset.val);}catch{}const a=document.querySelector('.report');if(a)a.className='report ps-'+b.dataset.val;document.querySelectorAll('[data-act=psize]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.val===b.dataset.val));break;}
+    case 'print':{b.disabled=true;b.textContent='Bilder werden geladen…';const imgs=[...document.querySelectorAll('.report img')];
+      await Promise.all(imgs.map(im=>im.complete&&im.naturalWidth?Promise.resolve():new Promise(r=>{im.onload=im.onerror=r;setTimeout(r,8000);})));
+      await Promise.all(imgs.map(im=>im.decode?im.decode().catch(()=>{}):null));
+      b.disabled=false;b.textContent='Drucken / als PDF sichern';window.print();break;}
     case 'csv':{const x=S.get(b.dataset.id);await flush();deliver(fileBase(x)+'_setlog.csv',buildCSV(x),'text/csv');break;}
     case 'backup':{const p=S.get(b.dataset.id);await flush();toast('Backup wird erstellt…');const json=await buildBackup(p);
       deliver(`${slug(p.name)}_setlog_backup_${today()}.json`,json,'application/json',()=>{p.lastBackup=Date.now();touch(p);rerender();});break;}
