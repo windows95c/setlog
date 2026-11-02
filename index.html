@@ -280,7 +280,7 @@ window.addEventListener('unhandledrejection',function(e){var r=e.reason;window._
 </script>
 <script>
 'use strict';
-const APP_VERSION='1.7.2';
+const APP_VERSION='1.7.3';
 /* Kamera/Mikro offen halten: iOS fragt bei jedem neuen Zugriff erneut – Streams werden daher wiederverwendet und erst nach Leerlauf freigegeben */
 const KEEP_MS=3*60000;const media={cam:null,camKey:'',camT:0,mic:null,micT:0};
 const liveStream=s=>!!(s&&s.getTracks().some(t=>t.readyState==='live'&&!t.muted&&t.enabled));
@@ -439,7 +439,8 @@ function vProject(cur){
     ${F('Kameras','camPresets',p.camPresets,{type:'textarea',rows:3})}
     ${F('Objektive','lensPresets',p.lensPresets,{type:'textarea',rows:4,ph:'Summicron-C 25mm\nSummicron-C 35mm\nSummicron-C 50mm'})}</section>
   <section class="card"><h2 class="sec">Export</h2>
-    <div class="btns"><button class="btn" data-act="report" data-id="${p.id}">Report (PDF)</button><button class="btn" data-act="csv" data-id="${p.id}">CSV</button><button class="btn" data-act="backup" data-id="${p.id}">Backup (JSON)</button></div>
+    <div class="btns"><button class="btn" data-act="report" data-id="${p.id}">Report (PDF)</button><button class="btn" data-act="csv" data-id="${p.id}">CSV</button><button class="btn" data-act="backup" data-id="${p.id}">Backup (JSON)</button><button class="btn" data-act="backup" data-lite="1" data-id="${p.id}">Backup ohne Originale</button></div>
+    <p class="hint">Alles bleibt auf dem iPhone. Report, CSV und Backup werden lokal erzeugt und nur über das iOS-Teilen-Menü weitergegeben.</p>
     <p class="hint ${p.lastBackup?'':'warn'}">${p.lastBackup?'Letztes Backup: '+fmtDT(p.lastBackup):'Noch kein Backup gesichert. Fotos und Daten liegen nur auf diesem iPhone.'}</p></section>
   <div class="danger"><button class="btn ghost-danger" data-act="del" data-id="${p.id}">Projekt löschen</button></div>`};
 }
@@ -1285,11 +1286,11 @@ function buildCSV(it){const rows=[CSV_HEAD];
   return '﻿'+rows.map(r=>r.map(csvCell).join(';')).join('\r\n');}
 function bufToB64(buf){const b=new Uint8Array(buf);let s='';for(let i=0;i<b.length;i+=0x8000)s+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000));return btoa(s);}
 function b64ToBuf(b64){const s=atob(b64);const b=new Uint8Array(s.length);for(let i=0;i<s.length;i++)b[i]=s.charCodeAt(i);return b.buffer;}
-async function buildBackup(p){const items=[p,...locsOf(p)];for(const d of kids(p.id,'day')){items.push(d);items.push(...kids(d.id,'setup'));}
+async function buildBackup(p,opt){opt=opt||{orig:true};const items=[p,...locsOf(p)];for(const d of kids(p.id,'day')){items.push(d);items.push(...kids(d.id,'setup'));}
   const photos=[],audio=[],origs=[],cthumbs=[];
   for(const s of items.filter(i=>i.type==='setup'||i.type==='loc')){
     for(const ph of await getPhotos(s.id))photos.push({id:ph.id,setupId:ph.setupId,caption:ph.caption,scene:ph.scene||'',meta:ph.meta||null,origId:ph.origId||null,lens:ph.lens||null,autoCap:ph.autoCap||'',ann:ph.ann||null,mask:ph.mask||null,annData:ph.annBuf?bufToB64(ph.annBuf):null,created:ph.created,type:ph.type,data:bufToB64(ph.buf)});
-    for(const o of await idb('orig','readonly',st=>st.index('setup').getAll(s.id)))origs.push({id:o.id,setupId:o.setupId,f35:o.f35||null,W:o.W,H:o.H,created:o.created,type:o.type,data:bufToB64(o.buf)});
+    if(opt.orig)for(const o of await idb('orig','readonly',st=>st.index('setup').getAll(s.id)))origs.push({id:o.id,setupId:o.setupId,f35:o.f35||null,W:o.W,H:o.H,created:o.created,type:o.type,data:bufToB64(o.buf)});
     for(const x of await getCThumbs(s.id))cthumbs.push({id:x.id,setupId:x.setupId,clip:x.clip,created:x.created,data:bufToB64(x.buf)});
     for(const a of await getAudio(s.id))audio.push({id:a.id,setupId:a.setupId,created:a.created,type:a.type,data:bufToB64(a.buf)});}
   return JSON.stringify({app:'vfx-setlog',version:1,exported:new Date().toISOString(),items,photos,audio,origs,cthumbs});}
@@ -1310,7 +1311,7 @@ function shareable(file){try{return !!(navigator.canShare&&navigator.canShare({f
 async function shareFile(file){
   if(shareable(file)){try{await navigator.share({files:[file],title:file.name});return 'ok';}
     catch(e){if(e.name==='AbortError')return 'abort';return 'err:'+(e.message||e.name);}}
-  if(isIOS){const u=URL.createObjectURL(file);const w=window.open(u,'_blank');setTimeout(()=>URL.revokeObjectURL(u),60000);return w?'ok':'err:Teilen nicht unterstützt';}
+  if(isIOS)return 'err:iOS lehnt das Teilen dieser Datei ab ('+fmtSize(file.size)+'). Bei großen Backups „Backup ohne Originale“ nutzen.';
   download(file);return 'ok';}
 // Datei vorbereiten, dann per eigenem Tipp teilen (iOS verlangt eine frische Nutzeraktion; json-Typ wird von iOS oft abgelehnt → text/plain)
 function deliver(name,content,type,onDone){let file=new File([content],name,{type});
@@ -1318,7 +1319,7 @@ function deliver(name,content,type,onDone){let file=new File([content],name,{typ
   $('#sheetMsg').textContent=`${name} · ${fmtSize(file.size)} – bereit.`;$('#sheet').hidden=false;
   $('#sheetGo').onclick=async()=>{const r=await shareFile(file);
     if(r==='ok'){$('#sheet').hidden=true;onDone&&onDone();}
-    else if(r.startsWith('err:'))toast('Teilen fehlgeschlagen: '+r.slice(4));};}
+    else if(r.startsWith('err:')){$('#sheetMsg').textContent='Teilen fehlgeschlagen: '+r.slice(4);}};}
 $('#sheetX').onclick=()=>$('#sheet').hidden=true;
 let vw={list:[],urls:[]};
 function vwOpen(list,idx,item){vw.list=list;vw.item=item||null;vw.dirty=false;vw.pi=-1;const tr=$('#vwTrack');
@@ -1410,8 +1411,8 @@ app.addEventListener('click',async e=>{
       await Promise.all(imgs.map(im=>im.decode?im.decode().catch(()=>{}):null));
       b.disabled=false;b.textContent='Drucken / als PDF sichern';window.print();break;}
     case 'csv':{const x=S.get(b.dataset.id);await flush();deliver(fileBase(x)+'_setlog.csv',buildCSV(x),'text/csv');break;}
-    case 'backup':{const p=S.get(b.dataset.id);await flush();toast('Backup wird erstellt…');const json=await buildBackup(p);
-      deliver(`${slug(p.name)}_setlog_backup_${today()}.json`,json,'application/json',()=>{p.lastBackup=Date.now();touch(p);rerender();});break;}
+    case 'backup':{const p=S.get(b.dataset.id);await flush();toast('Backup wird erstellt…');const lite=!!b.dataset.lite;const json=await buildBackup(p,{orig:!lite});
+      deliver(`${slug(p.name)}_setlog_backup${lite?'_ohne-originale':''}_${today()}.json`,json,'application/json',()=>{p.lastBackup=Date.now();touch(p);rerender();});break;}
     case 'copyMemos':{const txt=memoExport(S.get(b.dataset.id)).text;try{await navigator.clipboard.writeText(txt);toast('Kopiert – jetzt in Claude einfügen');}catch{const r=document.createRange();r.selectNodeContents($('#memoText'));const sel=getSelection();sel.removeAllRanges();sel.addRange(r);toast('Text markiert – „Kopieren“ wählen');}break;}
     case 'shareMemoPkg':{const p=S.get(b.dataset.id);await flush();toast('Paket wird erstellt…');const pk=await memoPackage(p);if(!pk.count){toast('Keine offenen Memos');break;}
       deliver(`${slug(p.name)}_memos_${today()}_setlog.txt`,pk.json,'text/plain',()=>toast(`Paket mit ${pk.count} Memos (${pk.audio} Audio) bereit – im Claude-Chat anhängen`));break;}
