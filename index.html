@@ -280,7 +280,7 @@ window.addEventListener('unhandledrejection',function(e){var r=e.reason;window._
 </script>
 <script>
 'use strict';
-const APP_VERSION='1.7.1';
+const APP_VERSION='1.7.2';
 /* Kamera/Mikro offen halten: iOS fragt bei jedem neuen Zugriff erneut – Streams werden daher wiederverwendet und erst nach Leerlauf freigegeben */
 const KEEP_MS=3*60000;const media={cam:null,camKey:'',camT:0,mic:null,micT:0};
 const liveStream=s=>!!(s&&s.getTracks().some(t=>t.readyState==='live'&&!t.muted&&t.enabled));
@@ -1235,12 +1235,12 @@ function vClaude(cur){const p=S.get(cur.id);const ex=memoExport(p);const nAud=[.
     <details><summary class="hint">Nur Text kopieren (ohne Audio)</summary><pre class="box" id="memoText">${esc(ex.text)}</pre><div class="btns"><button class="btn" data-act="copyMemos" data-id="${p.id}">Text kopieren</button></div></details>`:''}</section>
   <section class="card"><h2 class="sec">2 · Antwort von Claude einspielen</h2>
     <p class="hint">Claudes Antwort (den JSON-Block) hier einfügen. Text drumherum ist egal.</p>
-    <label class="fld"><span>Update</span><textarea id="patchIn" rows="7" placeholder='{"app":"vfx-setlog-update", …}' autocapitalize="off" spellcheck="false"></textarea></label>
+    <label class="fld"><span>Update</span><textarea id="patchIn" rows="7" placeholder='{"app":"vfx-setlog-update", …}' autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false"></textarea></label>
     <label class="chk"><input type="checkbox" id="delAudio"> Audio übernommener Memos danach löschen (spart Speicher)</label>
     <button class="btn primary block" data-act="applyPatch" data-id="${p.id}">Prüfen &amp; übernehmen</button>
     <div id="patchOut"></div></section>`};}
 function parsePatch(raw){const a=raw.indexOf('{'),b=raw.lastIndexOf('}');if(a<0||b<a)throw new Error('Kein JSON gefunden.');
-  const j=JSON.parse(raw.slice(a,b+1).replace(/[“”]/g,'"'));if(j.app!=='vfx-setlog-update')throw new Error('Das ist kein Setlog-Update.');return j;}
+  const src=raw.slice(a,b+1);let j;try{j=JSON.parse(src);}catch(e1){try{j=JSON.parse(src.replace(/[“”„]/g,'"'));}catch(e2){throw new Error('Update unvollständig oder beschädigt: '+e1.message);}}if(j.app!=='vfx-setlog-update')throw new Error('Das ist kein Setlog-Update.');return j;}
 function normVal(path,v){if(/^refs\.|\.circled$/.test(path))return v===true||v==='true'||v==='ja';
   if(path==='kinds'||path==='weather')return Array.isArray(v)?v.map(String):String(v).split(',').map(x=>x.trim()).filter(Boolean);
   return v==null?'':String(v);}
