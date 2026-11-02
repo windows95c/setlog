@@ -280,7 +280,7 @@ window.addEventListener('unhandledrejection',function(e){var r=e.reason;window._
 </script>
 <script>
 'use strict';
-const APP_VERSION='1.7.0';
+const APP_VERSION='1.7.1';
 /* Kamera/Mikro offen halten: iOS fragt bei jedem neuen Zugriff erneut – Streams werden daher wiederverwendet und erst nach Leerlauf freigegeben */
 const KEEP_MS=3*60000;const media={cam:null,camKey:'',camT:0,mic:null,micT:0};
 const liveStream=s=>!!(s&&s.getTracks().some(t=>t.readyState==='live'&&!t.muted&&t.enabled));
@@ -1027,9 +1027,11 @@ function edClick(e){const t=e.target.closest('[data-tool],[data-color],[data-w],
 }
 
 /* ---------- DIT / Kamera-Metadaten (komplett lokal) ---------- */
-const CLIP_RE=/([A-Z]\d{3}C\d{3})/i;
-const normClip=s=>{const m=String(s||'').toUpperCase().replace(/\s+/g,'').match(CLIP_RE);return m?m[1]:'';};
+const CLIP_RE=/([A-Z])_?(\d{3,4})C(\d{3})/i;
+const normClip=s=>{const m=String(s||'').toUpperCase().replace(/\s+/g,'').match(CLIP_RE);if(!m)return '';const reel=m[2].length===4&&m[2][0]==='0'?m[2].slice(1):m[2];return m[1]+reel+'C'+m[3];};
 const DIT_FIELDS=[['clip','Clip-Name',['name','clipname','clip','filename','file','sourcefile','cliptitle','sourcename','clipfilename']],
+ ['setup','Setup / VFX-ID',['setup','vfxid','vfxsetup','setupid']],
+ ['height','Objektivhöhe',['lensheight','cameraheight','height','hoehe','objektivhoehe']],
  ['reel','Reel / Mag',['tape','reel','reelname','reelnumber','mag','magazine','rollcard','card','cardname']],
  ['tcin','TC In',['start','starttc','tcin','timecodein','sourcein','starttimecode','timecode','sourcestart']],
  ['tcout','TC Out',['end','endtc','tcout','timecodeout','sourceout','endtimecode','sourceend']],
@@ -1054,7 +1056,7 @@ const DIT_FIELDS=[['clip','Clip-Name',['name','clipname','clip','filename','file
  ['res','Auflösung',['resolution','sensormode','format','recordingformat','imageformat']],
  ['codec','Codec',['codec','videocodec','recordingcodec']],
  ['lut','LUT / Look',['lut','look','lookname','lutname','cdl']],
- ['comment','Kommentar',['comments','comment','notes','note','description','ditnotes','clipnotes']]];
+ ['comment','Kommentar',['comments','comment','notes','note','description','ditnotes','clipnotes','kommentar','notizen']]];
 const keyN=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
 function parseDelim(text){const first=text.split(/\r?\n/).find(l=>l.trim())||'';const d=['\t',';',','].sort((a,b)=>first.split(b).length-first.split(a).length)[0];
   const rows=[];let row=[],cur='',q=false;for(let i=0;i<text.length;i++){const ch=text[i];
@@ -1068,7 +1070,8 @@ function parseMeta(text,name){text=text.replace(/^﻿/,'');const t=(/\.ale$/i.te
   if(!rows||rows.length<2)throw new Error('Keine Tabelle erkannt.');
   let h=0;for(let k=0;k<Math.min(6,rows.length);k++){if(rows[k].filter(x=>x.trim()).length>=Math.max(3,rows[0].length*.5)){h=k;break;}}
   const head=rows[h].map(x=>x.trim());const data=rows.slice(h+1).filter(r=>r.length>1);
-  const map={};DIT_FIELDS.forEach(([f,,al])=>{let ix=head.findIndex(c=>al.includes(keyN(c)));if(ix<0)ix=head.findIndex(c=>al.some(a=>keyN(c).includes(a)&&a.length>3));if(ix>=0)map[f]=ix;});
+  const map={};const used=new Set();DIT_FIELDS.forEach(([f,,al])=>{const ix=head.findIndex((c,k)=>!used.has(k)&&al.includes(keyN(c)));if(ix>=0){map[f]=ix;used.add(ix);}});
+  DIT_FIELDS.forEach(([f,,al])=>{if(map[f]!=null)return;const ix=head.findIndex((c,k)=>!used.has(k)&&al.some(a=>keyN(c).includes(a)&&a.length>3));if(ix>=0){map[f]=ix;used.add(ix);}});
   if(map.clip==null){const ix=head.findIndex((c,k)=>data.slice(0,20).filter(r=>CLIP_RE.test(r[k]||'')).length>=Math.min(3,data.length));if(ix>=0)map.clip=ix;}
   return {head,data,map,source:name};}
 const hmFrom=(t,tc)=>{const m=String(t||'').match(/(\d{1,2}):(\d{2})/)||String(tc||'').match(/^(\d{1,2}):(\d{2})/);return m?pad2(m[1])+':'+m[2]:'';};
@@ -1082,7 +1085,9 @@ function ditPlan(p,T,fallback){const days=kids(p.id,'day');const setups=days.fla
   const plan=[];const seen=new Set();
   for(const r of T.data){const {clip,meta}=rowClip(T,r);if(!clip||seen.has(clip))continue;seen.add(clip);
     let tgt=byClip.get(clip),how='Take vorhanden';
-    if(!tgt){const date=isoDate(meta.date);const hmv=hmFrom(meta.time,meta.tcin);let cand=setups.filter(x=>!date||x.d.date===date);
+    if(!tgt&&meta.setup){const date=isoDate(meta.date);const hit=setups.find(x=>String(x.s.vfxid).trim()===meta.setup.trim()&&(!date||x.d.date===date))||setups.find(x=>String(x.s.vfxid).trim()===meta.setup.trim());if(hit){tgt={s:hit.s,i:null};how='Setup-Spalte';}}
+    if(!tgt&&T.map.setup!=null&&!meta.setup){tgt=fallback?(()=>{const f=setups.find(x=>x.s.id===fallback);return f?{s:f.s,i:null}:null;})():null;how='Standard-Setup';}
+    else if(!tgt){const date=isoDate(meta.date);const hmv=hmFrom(meta.time,meta.tcin);let cand=setups.filter(x=>!date||x.d.date===date);
       let s=meta.scene?cand.find(x=>String(x.s.scene).trim().toLowerCase()===meta.scene.toLowerCase()&&(!meta.take||true)):null;how='nach Szene';
       if(!s&&hmv){const before=cand.filter(x=>x.s.time&&x.s.time<=hmv).sort((a,b)=>a.s.time.localeCompare(b.s.time));s=before.pop();how='nach Uhrzeit';}
       if(!s&&fallback){s=setups.find(x=>x.s.id===fallback);how='Standard-Setup';}
@@ -1092,11 +1097,11 @@ function ditPlan(p,T,fallback){const days=kids(p.id,'day');const setups=days.fla
 async function ditApply(p,plan){let upd=0,add=0;const touchedS=new Set();
   for(const x of plan){if(!x.tgt)continue;const s=x.tgt.s;s.takes=s.takes||[];let t;
     if(x.tgt.i!=null)t=s.takes[x.tgt.i];
-    else{t=s.takes.find(q=>normClip(q.clip)===x.clip);if(!t){t={n:String(x.meta.take||s.takes.length+1),circled:false,clip:x.clip,note:''};s.takes.push(t);add++;}}
+    else{t=s.takes.find(q=>normClip(q.clip)===x.clip);if(!t){t={n:String(x.meta.take||'–'),circled:false,clip:x.clip,note:''};s.takes.push(t);add++;}}
     if(x.tgt.i!=null||t)upd+=x.tgt.i!=null?1:0;
-    t.meta=Object.assign({},t.meta||{},x.meta);if(/^(y|yes|ja|true|1|x|✓|circled)$/i.test(x.meta.circle||''))t.circled=true;
+    t.meta=Object.assign({},t.meta||{},x.meta);if(x.meta.take)t.n=String(x.meta.take);if(/^(y|yes|ja|true|1|x|✓|circled)$/i.test(x.meta.circle||''))t.circled=true;
     if(x.meta.comment&&!t.note)t.note=x.meta.comment;
-    const c=(s.cams=s.cams&&s.cams.length?s.cams:[{cam:'A'}])[0];const fill=(k,v)=>{if(v&&!c[k])c[k]=v;};
+    s.cams=s.cams&&s.cams.length?s.cams:[{cam:'A'}];const L=x.clip[0];const c=s.cams.find(q=>String(q.cam).toUpperCase()===L)||(s.cams.length===1&&L==='A'?s.cams[0]:null);const fill=(k,v)=>{if(c&&v&&!c[k])c[k]=v;};fill('height',(x.meta.height||'').replace(/\s*cm$/i,''));
     fill('lens',x.meta.lens);fill('mm',(x.meta.mm||'').replace(/\s*mm$/i,''));fill('tstop',(x.meta.tstop||'').replace(/^[tf]\s*/i,''));fill('iso',x.meta.iso);fill('shutter',x.meta.shutter);fill('fps',x.meta.fps);fill('kelvin',(x.meta.wb||'').replace(/\s*k$/i,''));
     touchedS.add(s);}
   touchedS.forEach(s=>{s.takes.sort((a,b)=>String(a.clip||'').localeCompare(String(b.clip||''))||0);touch(s);});
@@ -1110,7 +1115,7 @@ async function ditThumbs(p,files){const setups=kids(p.id,'day').flatMap(d=>kids(
     if(!tb){miss.push(f.name);continue;}
     await idb('cthumb','readwrite',st=>st.put({id:hit.s.id+'|'+c,setupId:hit.s.id,clip:c,buf:tb,created:Date.now()}));hit.t.thumb=true;touch(hit.s);ok++;}
   await flush();return {ok,miss};}
-function tmetaLine(m){if(!m)return '';const parts=[m.tcin&&'TC '+m.tcin,m.lens,m.mm&&(String(m.mm).match(/mm/i)?m.mm:m.mm+'mm'),m.tstop&&('T'+String(m.tstop).replace(/^[tf]\s*/i,'')),m.iso&&('EI '+m.iso),m.shutter&&(String(m.shutter).match(/°|\//)?m.shutter:m.shutter+'°'),m.fps&&(m.fps+' fps'),m.wb&&(String(m.wb).match(/k$/i)?m.wb:m.wb+'K'),m.nd&&('ND '+m.nd),m.focus&&('Fokus '+m.focus),m.tilt&&('Tilt '+m.tilt)].filter(Boolean);return parts.join(' · ');}
+function tmetaLine(m){if(!m)return '';const parts=[m.tcin&&'TC '+m.tcin,m.lens,m.mm&&(String(m.mm).match(/mm/i)?m.mm:m.mm+'mm'),m.tstop&&('T'+String(m.tstop).replace(/^[tf]\s*/i,'')),m.iso&&('EI '+m.iso),m.shutter&&(String(m.shutter).match(/°|\//)?m.shutter:m.shutter+'°'),m.fps&&(m.fps+' fps'),m.wb&&(String(m.wb).match(/k$/i)?m.wb:m.wb+'K'),m.nd&&(/^nd|clear/i.test(m.nd)?m.nd:'ND '+m.nd),m.focus&&('Fokus '+m.focus),m.height&&('Höhe '+m.height+(/\d$/.test(m.height)?' cm':'')),m.tilt&&('Tilt '+m.tilt)].filter(Boolean);return parts.join(' · ');}
 async function fillTakeThumbs(s,sel){const list=await getCThumbs(s.id);const map=new Map(list.map(x=>[x.clip,x]));
   document.querySelectorAll(sel||'[data-tthumb]').forEach(el=>{const x=map.get(el.dataset.tthumb);if(!x)return;const u=URL.createObjectURL(new Blob([x.buf],{type:'image/jpeg'}));objURLs.push(u);el.innerHTML=`<img src="${u}" alt="${esc(x.clip)}">`;el.hidden=false;});}
 
