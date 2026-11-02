@@ -72,6 +72,12 @@ textarea{resize:vertical}
 .take{display:grid;grid-template-columns:52px 1fr 40px 40px;gap:6px 8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
 .take:last-of-type{border-bottom:none}
 .take .note{grid-column:2/5}
+.tmeta{grid-column:2/5;display:flex;gap:8px;align-items:flex-start;font-size:11.5px;color:var(--muted);line-height:1.35}
+.tthumb{flex:none;width:120px}.tthumb img{width:120px;border-radius:4px;display:block}
+.dmap{display:grid;grid-template-columns:1fr 1fr;gap:8px}.dmap select{font:inherit;font-size:14px;min-height:40px;border-radius:8px;border:1px solid var(--line);background:var(--surface2);color:var(--fg);width:100%;min-width:0}
+.dgrp{padding:8px 0;border-bottom:1px solid var(--line)}.dclips{font-size:12px;word-break:break-word}.warn{color:var(--warn)}
+#ditFallback{font:inherit;font-size:15px;min-height:44px;border-radius:8px;width:100%}
+.r-tth{width:110px}.r-tth img{width:110px;display:block}
 .x.mic{font-size:18px}
 .x.mic.rec{width:auto;padding:0 8px;font-size:13px;border-radius:8px}
 .memo .tk{color:var(--accent);font-weight:600}
@@ -274,7 +280,7 @@ window.addEventListener('unhandledrejection',function(e){var r=e.reason;window._
 </script>
 <script>
 'use strict';
-const APP_VERSION='1.6.2';
+const APP_VERSION='1.7.0';
 /* Kamera/Mikro offen halten: iOS fragt bei jedem neuen Zugriff erneut – Streams werden daher wiederverwendet und erst nach Leerlauf freigegeben */
 const KEEP_MS=3*60000;const media={cam:null,camKey:'',camT:0,mic:null,micT:0};
 const liveStream=s=>!!(s&&s.getTracks().some(t=>t.readyState==='live'&&!t.muted&&t.enabled));
@@ -312,12 +318,13 @@ const DL={fps:['23.976','24','25','29.97','48','50','100'],shutter:['180°','172
 /* ---------- IndexedDB ---------- */
 let db;
 function openDB(){return new Promise((res,rej)=>{let done=false;
-  const tryOpen=()=>{let r;try{r=indexedDB.open('vfx-setlog',2);}catch(e){if(!done){done=true;rej(e);}return;}
+  const tryOpen=()=>{let r;try{r=indexedDB.open('vfx-setlog',3);}catch(e){if(!done){done=true;rej(e);}return;}
     r.onupgradeneeded=()=>{const d=r.result;
       if(!d.objectStoreNames.contains('items'))d.createObjectStore('items',{keyPath:'id'});
       if(!d.objectStoreNames.contains('photos'))d.createObjectStore('photos',{keyPath:'id'}).createIndex('setup','setupId');
       if(!d.objectStoreNames.contains('audio'))d.createObjectStore('audio',{keyPath:'id'}).createIndex('setup','setupId');
-      if(!d.objectStoreNames.contains('orig'))d.createObjectStore('orig',{keyPath:'id'}).createIndex('setup','setupId');};
+      if(!d.objectStoreNames.contains('orig'))d.createObjectStore('orig',{keyPath:'id'}).createIndex('setup','setupId');
+      if(!d.objectStoreNames.contains('cthumb'))d.createObjectStore('cthumb',{keyPath:'id'}).createIndex('setup','setupId');};
     r.onsuccess=()=>{if(done){try{r.result.close()}catch{}return;}done=true;res(r.result);};
     r.onerror=()=>{if(!done){done=true;rej(r.error||new Error('IndexedDB-Fehler'));}};};
   if(!window.indexedDB){rej(new Error('IndexedDB nicht verfügbar'));return;}
@@ -376,7 +383,7 @@ function render(){
   objURLs.forEach(u=>URL.revokeObjectURL(u));objURLs=[];
   let cur=nav[nav.length-1];
   if(cur.id&&!S.has(cur.id)){nav=[{v:'home'}];cur=nav[0];}
-  const V={home:vHome,project:vProject,day:vDay,setup:vSetup,report:vReport,claude:vClaude,loc:vLoc}[cur.v]||vHome;
+  const V={home:vHome,project:vProject,day:vDay,setup:vSetup,report:vReport,claude:vClaude,loc:vLoc,dit:vDit}[cur.v]||vHome;
   const r=V(cur);
   $('#ttl').textContent=r.title;$('#sub').textContent=r.sub||'';
   $('#backBtn').hidden=nav.length<2;
@@ -422,6 +429,9 @@ function vProject(cur){
   <section class="stack"><div class="sec-row"><h2 class="sec">Drehtage</h2><span class="meta mono">${days.length} DT · ${nSet} Setups</span></div>
     ${days.map(dayRow).join('')||empty('Noch kein Drehtag angelegt.')}
     <button class="btn primary block" data-act="newDay" data-id="${p.id}">+ Drehtag</button></section>
+  <section class="card"><h2 class="sec">Kamera-Metadaten &amp; DIT</h2>
+    <p class="hint">ALE/CSV und Thumbnails lokal einlesen und über den Clip-Namen mit den Takes verknüpfen.</p>
+    <button class="btn block" data-act="open" data-v="dit" data-id="${p.id}">Metadaten / Thumbnails importieren</button></section>
   <section class="card"><h2 class="sec">Memos &amp; Claude</h2>
     <p class="hint">${memoOpen?`${memoOpen} offene Memo${memoOpen>1?'s':''}. `:''}Memos exportieren, bei Claude einfügen, Antwort hier wieder einspielen.</p>
     <button class="btn block" data-act="open" data-v="claude" data-id="${p.id}">Memos ↔ Claude</button></section>
@@ -489,14 +499,15 @@ function vSetup(cur){
 
   <div class="btns"><button class="btn" data-act="dupSetup" data-id="${s.id}">Setup duplizieren</button><button class="btn ghost-danger" data-act="del" data-id="${s.id}">Setup löschen</button></div>
   ${actBar(s)}`,
-  after:()=>{fillPhotos(s);fillAudio(s);}};
+  after:()=>{fillPhotos(s);fillAudio(s);fillTakeThumbs(s);}};
 }
 function takeRow(tk,i){return `<div class="take ${tk.circled?'circ':''}">
   <button type="button" class="tnum mono" data-act="circle" data-i="${i}" aria-pressed="${!!tk.circled}" aria-label="Take ${esc(tk.n)} circlen">${esc(tk.n)}</button>
   <input data-k="takes.${i}.clip" value="${esc(tk.clip)}" placeholder="Clip / TC" class="mono" autocapitalize="characters" autocomplete="off">
   <button type="button" class="x mic" data-act="recTake" data-i="${i}" aria-label="Sprachmemo zu Take ${esc(tk.n)}">🎙</button>
   <button type="button" class="x" data-act="delTake" data-i="${i}" data-confirm aria-label="Take löschen">×</button>
-  <input class="note" data-k="takes.${i}.note" value="${esc(tk.note)}" placeholder="Notiz zum Take" autocomplete="off"></div>`;}
+  <input class="note" data-k="takes.${i}.note" value="${esc(tk.note)}" placeholder="Notiz zum Take" autocomplete="off">
+  ${tk.meta||tk.thumb?`<div class="tmeta">${tk.thumb?`<div class="tthumb" data-tthumb="${esc(normClip(tk.clip))}" hidden></div>`:''}<span class="mono">${esc(tmetaLine(tk.meta))}</span></div>`:''}</div>`;}
 function memoRow(m,i){return `<div class="memo ${m.done?'done':''}" data-memo="${m.id}">
   <div class="memo-h"><span class="t mono">${esc(m.t||'')}${m.take?` · <span class="tk">Take ${esc(m.take)}</span>`:''}${m.audio?' · Audio':''}${m.audio&&!m.text.trim()&&!m.done?' · wartet auf Claude':''}</span><button type="button" class="x" data-act="delMemo" data-i="${i}" data-confirm aria-label="Memo löschen">×</button></div>
   <div class="memo-audio"></div>
@@ -1015,6 +1026,117 @@ function edClick(e){const t=e.target.closest('[data-tool],[data-color],[data-w],
   else if(a==='clear'){if(!t.dataset.armed){t.dataset.armed='1';t.classList.add('armed');setTimeout(()=>{delete t.dataset.armed;t.classList.remove('armed');},3000);return;}ed.ann=[];ed.mask=[];edDraw();delete t.dataset.armed;t.classList.remove('armed');}
 }
 
+/* ---------- DIT / Kamera-Metadaten (komplett lokal) ---------- */
+const CLIP_RE=/([A-Z]\d{3}C\d{3})/i;
+const normClip=s=>{const m=String(s||'').toUpperCase().replace(/\s+/g,'').match(CLIP_RE);return m?m[1]:'';};
+const DIT_FIELDS=[['clip','Clip-Name',['name','clipname','clip','filename','file','sourcefile','cliptitle','sourcename','clipfilename']],
+ ['reel','Reel / Mag',['tape','reel','reelname','reelnumber','mag','magazine','rollcard','card','cardname']],
+ ['tcin','TC In',['start','starttc','tcin','timecodein','sourcein','starttimecode','timecode','sourcestart']],
+ ['tcout','TC Out',['end','endtc','tcout','timecodeout','sourceout','endtimecode','sourceend']],
+ ['dur','Dauer',['duration','dur','clipduration']],
+ ['fps','FPS',['fps','sensorfps','camerafps','framerate','recordfps','projectfps','shootingframerate','capturefps']],
+ ['lens','Objektiv',['lens','lenstype','lensmodel','lensname']],
+ ['mm','Brennweite',['focallength','focal','lensfocallength','focallengthmm','zoom','zoomposition']],
+ ['tstop','Blende',['tstop','iris','aperture','lensiris','fstop','irisposition','lenststop']],
+ ['focus','Fokus',['focusdistance','focus','lensfocusdistance','focusposition']],
+ ['iso','ISO / EI',['iso','ei','exposureindex','asa','isoei']],
+ ['shutter','Shutter',['shutter','shutterangle','shutterspeed','exposuretime','shutterangledeg']],
+ ['wb','Weißabgleich',['whitebalance','wb','colortemperature','kelvin','colortemp','whitebalancek','cct']],
+ ['tint','Tint',['tint','whitebalancetint','tintcc']],
+ ['nd','ND',['nd','ndfilter','ndfilterdensity','filter']],
+ ['tilt','Tilt',['tilt','cameratilt','tiltangle']],
+ ['roll','Roll',['rollangle','cameraroll','rolldeg']],
+ ['scene','Szene',['scene','scn']],['take','Take',['take','tk']],
+ ['circle','Circle',['circled','circle','select','good','goodtake']],
+ ['date','Datum',['date','recorddate','shootdate','creationdate','dateshot','datecreated','shootingdate']],
+ ['time','Uhrzeit',['recordtime','time','timeofday','creationtime','starttime']],
+ ['camera','Kamera',['camera','cameraid','cameraindex','cameraletter','cam','cameraname']],
+ ['res','Auflösung',['resolution','sensormode','format','recordingformat','imageformat']],
+ ['codec','Codec',['codec','videocodec','recordingcodec']],
+ ['lut','LUT / Look',['lut','look','lookname','lutname','cdl']],
+ ['comment','Kommentar',['comments','comment','notes','note','description','ditnotes','clipnotes']]];
+const keyN=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+function parseDelim(text){const first=text.split(/\r?\n/).find(l=>l.trim())||'';const d=['\t',';',','].sort((a,b)=>first.split(b).length-first.split(a).length)[0];
+  const rows=[];let row=[],cur='',q=false;for(let i=0;i<text.length;i++){const ch=text[i];
+    if(q){if(ch==='"'){if(text[i+1]==='"'){cur+='"';i++;}else q=false;}else cur+=ch;}
+    else if(ch==='"')q=true;else if(ch===d){row.push(cur);cur='';}else if(ch==='\n'||ch==='\r'){if(ch==='\r'&&text[i+1]==='\n')i++;row.push(cur);cur='';if(row.some(x=>x.trim()))rows.push(row);row=[];}else cur+=ch;}
+  row.push(cur);if(row.some(x=>x.trim()))rows.push(row);return rows;}
+function parseALE(text){const L=text.split(/\r?\n/);let i=L.findIndex(l=>/^column\s*$/i.test(l.trim()));if(i<0)return null;
+  const cols=L[i+1].split('\t');let j=L.findIndex((l,k)=>k>i&&/^data\s*$/i.test(l.trim()));if(j<0)return null;
+  const rows=L.slice(j+1).filter(l=>l.trim()).map(l=>l.split('\t'));return [cols,...rows];}
+function parseMeta(text,name){text=text.replace(/^﻿/,'');const t=(/\.ale$/i.test(name)||/^heading\s*$/im.test(text))?parseALE(text):null;const rows=t||parseDelim(text);
+  if(!rows||rows.length<2)throw new Error('Keine Tabelle erkannt.');
+  let h=0;for(let k=0;k<Math.min(6,rows.length);k++){if(rows[k].filter(x=>x.trim()).length>=Math.max(3,rows[0].length*.5)){h=k;break;}}
+  const head=rows[h].map(x=>x.trim());const data=rows.slice(h+1).filter(r=>r.length>1);
+  const map={};DIT_FIELDS.forEach(([f,,al])=>{let ix=head.findIndex(c=>al.includes(keyN(c)));if(ix<0)ix=head.findIndex(c=>al.some(a=>keyN(c).includes(a)&&a.length>3));if(ix>=0)map[f]=ix;});
+  if(map.clip==null){const ix=head.findIndex((c,k)=>data.slice(0,20).filter(r=>CLIP_RE.test(r[k]||'')).length>=Math.min(3,data.length));if(ix>=0)map.clip=ix;}
+  return {head,data,map,source:name};}
+const hmFrom=(t,tc)=>{const m=String(t||'').match(/(\d{1,2}):(\d{2})/)||String(tc||'').match(/^(\d{1,2}):(\d{2})/);return m?pad2(m[1])+':'+m[2]:'';};
+function isoDate(s){s=String(s||'').trim();let m=s.match(/(\d{4})[-./](\d{1,2})[-./](\d{1,2})/);if(m)return `${m[1]}-${pad2(m[2])}-${pad2(m[3])}`;
+  m=s.match(/(\d{1,2})[./](\d{1,2})[./](\d{2,4})/);if(m){const y=m[3].length===2?'20'+m[3]:m[3];return `${y}-${pad2(m[2])}-${pad2(m[1])}`;}
+  m=s.match(/^(\d{4})(\d{2})(\d{2})$/);if(m)return `${m[1]}-${m[2]}-${m[3]}`;return '';}
+function rowClip(T,r){const g=f=>T.map[f]!=null?String(r[T.map[f]]??'').trim():'';const clip=normClip(g('clip'))||normClip(g('reel'))||'';
+  const meta={};DIT_FIELDS.forEach(([f])=>{if(f!=='clip'){const v=g(f);if(v)meta[f]=v;}});return {clip,meta};}
+function ditPlan(p,T,fallback){const days=kids(p.id,'day');const setups=days.flatMap(d=>kids(d.id,'setup').map(s=>({s,d})));
+  const byClip=new Map();setups.forEach(({s})=>(s.takes||[]).forEach((t,i)=>{const c=normClip(t.clip);if(c)byClip.set(c,{s,i});}));
+  const plan=[];const seen=new Set();
+  for(const r of T.data){const {clip,meta}=rowClip(T,r);if(!clip||seen.has(clip))continue;seen.add(clip);
+    let tgt=byClip.get(clip),how='Take vorhanden';
+    if(!tgt){const date=isoDate(meta.date);const hmv=hmFrom(meta.time,meta.tcin);let cand=setups.filter(x=>!date||x.d.date===date);
+      let s=meta.scene?cand.find(x=>String(x.s.scene).trim().toLowerCase()===meta.scene.toLowerCase()&&(!meta.take||true)):null;how='nach Szene';
+      if(!s&&hmv){const before=cand.filter(x=>x.s.time&&x.s.time<=hmv).sort((a,b)=>a.s.time.localeCompare(b.s.time));s=before.pop();how='nach Uhrzeit';}
+      if(!s&&fallback){s=setups.find(x=>x.s.id===fallback);how='Standard-Setup';}
+      tgt=s?{s:s.s,i:null}:null;}
+    plan.push({clip,meta,tgt,how});}
+  return plan;}
+async function ditApply(p,plan){let upd=0,add=0;const touchedS=new Set();
+  for(const x of plan){if(!x.tgt)continue;const s=x.tgt.s;s.takes=s.takes||[];let t;
+    if(x.tgt.i!=null)t=s.takes[x.tgt.i];
+    else{t=s.takes.find(q=>normClip(q.clip)===x.clip);if(!t){t={n:String(x.meta.take||s.takes.length+1),circled:false,clip:x.clip,note:''};s.takes.push(t);add++;}}
+    if(x.tgt.i!=null||t)upd+=x.tgt.i!=null?1:0;
+    t.meta=Object.assign({},t.meta||{},x.meta);if(/^(y|yes|ja|true|1|x|✓|circled)$/i.test(x.meta.circle||''))t.circled=true;
+    if(x.meta.comment&&!t.note)t.note=x.meta.comment;
+    const c=(s.cams=s.cams&&s.cams.length?s.cams:[{cam:'A'}])[0];const fill=(k,v)=>{if(v&&!c[k])c[k]=v;};
+    fill('lens',x.meta.lens);fill('mm',(x.meta.mm||'').replace(/\s*mm$/i,''));fill('tstop',(x.meta.tstop||'').replace(/^[tf]\s*/i,''));fill('iso',x.meta.iso);fill('shutter',x.meta.shutter);fill('fps',x.meta.fps);fill('kelvin',(x.meta.wb||'').replace(/\s*k$/i,''));
+    touchedS.add(s);}
+  touchedS.forEach(s=>{s.takes.sort((a,b)=>String(a.clip||'').localeCompare(String(b.clip||''))||0);touch(s);});
+  p.ditImports=(p.ditImports||[]).concat([{at:Date.now(),clips:plan.filter(x=>x.tgt).length}]);touch(p);await flush();return {upd,add,n:plan.filter(x=>x.tgt).length,miss:plan.filter(x=>!x.tgt).length};}
+/* Thumbnails: Dateiname enthält Clip-Namen (A001C026…) */
+const getCThumbs=sid=>idb('cthumb','readonly',s=>s.index('setup').getAll(sid));
+async function ditThumbs(p,files){const setups=kids(p.id,'day').flatMap(d=>kids(d.id,'setup'));const byClip=new Map();
+  setups.forEach(s=>(s.takes||[]).forEach(t=>{const c=normClip(t.clip);if(c)byClip.set(c,{s,t});}));let ok=0,miss=[];
+  for(const f of files){const c=normClip(f.name);const hit=c&&byClip.get(c);if(!hit){miss.push(f.name);continue;}
+    const tb=await (async()=>{try{const im=await loadImg(f);const k=Math.min(1,640/Math.max(im.naturalWidth,im.naturalHeight));const cv=document.createElement('canvas');cv.width=Math.round(im.naturalWidth*k);cv.height=Math.round(im.naturalHeight*k);cv.getContext('2d').drawImage(im,0,0,cv.width,cv.height);const b=await new Promise(r=>cv.toBlob(r,'image/jpeg',.85));return b?await b.arrayBuffer():null;}catch{return null;}})();
+    if(!tb){miss.push(f.name);continue;}
+    await idb('cthumb','readwrite',st=>st.put({id:hit.s.id+'|'+c,setupId:hit.s.id,clip:c,buf:tb,created:Date.now()}));hit.t.thumb=true;touch(hit.s);ok++;}
+  await flush();return {ok,miss};}
+function tmetaLine(m){if(!m)return '';const parts=[m.tcin&&'TC '+m.tcin,m.lens,m.mm&&(String(m.mm).match(/mm/i)?m.mm:m.mm+'mm'),m.tstop&&('T'+String(m.tstop).replace(/^[tf]\s*/i,'')),m.iso&&('EI '+m.iso),m.shutter&&(String(m.shutter).match(/°|\//)?m.shutter:m.shutter+'°'),m.fps&&(m.fps+' fps'),m.wb&&(String(m.wb).match(/k$/i)?m.wb:m.wb+'K'),m.nd&&('ND '+m.nd),m.focus&&('Fokus '+m.focus),m.tilt&&('Tilt '+m.tilt)].filter(Boolean);return parts.join(' · ');}
+async function fillTakeThumbs(s,sel){const list=await getCThumbs(s.id);const map=new Map(list.map(x=>[x.clip,x]));
+  document.querySelectorAll(sel||'[data-tthumb]').forEach(el=>{const x=map.get(el.dataset.tthumb);if(!x)return;const u=URL.createObjectURL(new Blob([x.buf],{type:'image/jpeg'}));objURLs.push(u);el.innerHTML=`<img src="${u}" alt="${esc(x.clip)}">`;el.hidden=false;});}
+
+/* Ansicht */
+let ditState=null;
+function vDit(cur){const p=S.get(cur.id);const T=ditState&&ditState.p===p.id?ditState.T:null;const setups=kids(p.id,'day').flatMap(d=>kids(d.id,'setup').map(s=>({s,d})));
+  let planHTML='';
+  if(T){const plan=ditPlan(p,T,ditState.fallback);ditState.plan=plan;const by=new Map();plan.forEach(x=>{const k=x.tgt?x.tgt.s.id:'';if(!by.has(k))by.set(k,[]);by.get(k).push(x);});
+    planHTML=`<section class="card"><h2 class="sec">2 · Spalten prüfen</h2><p class="hint">${esc(T.source)} · ${T.data.length} Zeilen. Automatisch erkannt – bei Bedarf korrigieren.</p>
+      <div class="dmap">${DIT_FIELDS.map(([f,l])=>`<label class="fld"><span>${l}</span><select data-ditmap="${f}"><option value="">–</option>${T.head.map((h,i)=>`<option value="${i}"${T.map[f]===i?' selected':''}>${esc(h||'Spalte '+(i+1))}</option>`).join('')}</select></label>`).join('')}</div></section>
+      <section class="card"><h2 class="sec">3 · Zuordnung</h2>
+      ${plan.length?'':'<p class="hint warn">Keine Clip-Namen gefunden. Spalte „Clip-Name“ oben wählen.</p>'}
+      ${[...by.entries()].map(([sid,xs])=>{const st=setups.find(x=>x.s.id===sid);return `<div class="dgrp"><strong>${st?`${esc(st.s.vfxid)} · Sz ${esc(st.s.scene||'–')} · DT ${esc(pad2(st.d.dt))}`:'<span class="warn">Nicht zugeordnet</span>'}</strong> <span class="mono meta">${xs.length} Clips</span><div class="mono dclips">${xs.map(x=>`${esc(x.clip)}${x.how&&st?` <span class="meta">(${x.how})</span>`:''}`).join(' · ')}</div></div>`;}).join('')}
+      ${plan.some(x=>!x.tgt)?`<label class="fld"><span>Nicht zugeordnete Clips in dieses Setup</span><select id="ditFallback"><option value="">– weglassen –</option>${setups.map(({s,d})=>`<option value="${s.id}"${ditState.fallback===s.id?' selected':''}>${esc(s.vfxid)} · Sz ${esc(s.scene||'–')} · DT ${esc(pad2(d.dt))}</option>`).join('')}</select></label>`:''}
+      <button class="btn primary block" data-act="ditApply" data-id="${p.id}">${plan.filter(x=>x.tgt).length} Clips übernehmen</button>
+      <p class="hint">Vorhandene Takes werden ergänzt, fehlende angelegt. Leere Kamerafelder des Setups werden aus den Metadaten gefüllt, nichts wird überschrieben.</p></section>`;}
+  return {title:'Kamera-Metadaten',sub:p.name,html:`
+  <section class="card"><h2 class="sec">1 · Metadaten laden</h2>
+    <p class="hint">ALE oder CSV aus Silverstack, Resolve, ShotPut, ARRI Reference Tool … Wird nur auf diesem iPhone gelesen.</p>
+    <label class="btn primary block">ALE / CSV wählen<input class="vh" type="file" accept=".ale,.csv,.txt,.tsv,text/*" data-file="dit"></label></section>
+  ${planHTML}
+  <section class="card"><h2 class="sec">Thumbnails</h2>
+    <p class="hint">JPEG/PNG-Standbilder aus dem DIT-Export wählen. Zuordnung über den Clip-Namen im Dateinamen (z. B. A001C026_…jpg). Erst Metadaten übernehmen, dann Thumbnails.</p>
+    <label class="btn block">Thumbnails wählen<input class="vh" type="file" accept="image/*" multiple data-file="ditthumbs"></label><div id="ditThumbOut"></div></section>
+  <p class="hint">Bisherige Importe: ${(p.ditImports||[]).length?(p.ditImports||[]).map(x=>`${fmtDT(x.at)} (${x.clips} Clips)`).join(', '):'keine'}</p>`};}
+
 /* ---------- Report ---------- */
 function repSize(){try{return localStorage.getItem('setlog-psize')||'M';}catch{return 'M';}}
 function vReport(cur){
@@ -1041,7 +1163,7 @@ function rSetup(s){const cams=s.cams||[];const t=s.takes||[];const refs=s.refs||
   ${camNotes.map(c=>`<p><b>Cam ${esc(c.cam)}:</b> ${nl(c.note)}</p>`).join('')}
   <div class="r-refs">${REFS.map(r=>`<span class="${refs[r.k]?'on':'off'}">${refs[r.k]?'✓':'–'} ${r.l}</span>`).join('')}</div>
   ${s.refsNote?`<p>${nl(s.refsNote)}</p>`:''}
-  ${t.length?`<div class="tbl"><table><thead><tr><th>Take</th><th>●</th><th>Clip / TC</th><th>Notiz</th></tr></thead><tbody>${t.map(x=>`<tr><td>${esc(x.n)}</td><td>${x.circled?'●':''}</td><td>${esc(x.clip)}</td><td>${esc(x.note)}</td></tr>`).join('')}</tbody></table></div>`:''}
+  ${t.length?`<div class="tbl"><table><thead><tr><th>Take</th><th>●</th>${t.some(x=>x.thumb)?'<th>Bild</th>':''}<th>Clip</th><th>Kamera-Metadaten</th><th>Notiz</th></tr></thead><tbody>${t.map(x=>`<tr><td>${esc(x.n)}</td><td>${x.circled?'●':''}</td>${t.some(y=>y.thumb)?`<td class="r-tth" data-rtthumb="${esc(s.id)}|${esc(normClip(x.clip))}"></td>`:''}<td class="mono">${esc(x.clip)}</td><td>${esc(tmetaLine(x.meta))}</td><td>${esc(x.note)}</td></tr>`).join('')}</tbody></table></div>`:''}
   ${s.notes?`<p><b>Notizen:</b> ${nl(s.notes)}</p>`:''}
   ${memos.map(m=>`<p class="r-memo">Memo ${esc(m.t)}: ${nl(m.text)}</p>`).join('')}
   <div class="r-photos" data-setup="${s.id}"></div></div>`;}
@@ -1054,7 +1176,8 @@ function rLoc(l){const g=parseGPS(l.gps);const d=g?sunDay(l.date,g.lat,g.lon):nu
   <dl class="r-meta">${kv.map(([k,v])=>`<dt>${k}</dt><dd>${nl(v)}</dd>`).join('')}</dl>
   ${memos.map(m=>`<p class="r-memo">Memo ${esc(m.t)}: ${nl(m.text)}</p>`).join('')}
   <div class="r-photos" data-setup="${l.id}"></div></div>`;}
-async function fillReportPhotos(days,locs){for(const s of [...days.flatMap(d=>kids(d.id,'setup')),...(locs||[])]){if(!s.photoCount)continue;
+async function fillReportPhotos(days,locs){for(const s of days.flatMap(d=>kids(d.id,'setup'))){if(!(s.takes||[]).some(t=>t.thumb))continue;for(const x of await getCThumbs(s.id)){const el=document.querySelector(`[data-rtthumb="${s.id}|${x.clip}"]`);if(el){const u=URL.createObjectURL(new Blob([x.buf],{type:'image/jpeg'}));objURLs.push(u);el.innerHTML=`<img src="${u}" alt="">`;}}}
+  for(const s of [...days.flatMap(d=>kids(d.id,'setup')),...(locs||[])]){if(!s.photoCount)continue;
   const box=document.querySelector(`.r-photos[data-setup="${s.id}"]`);if(!box)continue;
   const scs=scenesOf(s);const ord=new Map(scs.map((x,i)=>[x.id,i]));const list=(await getPhotos(s.id)).sort((a,b)=>(ord.has(a.scene)?ord.get(a.scene):999)-(ord.has(b.scene)?ord.get(b.scene):999));box.innerHTML=list.map(ph=>{const sc=scs.find(x=>x.id===ph.scene);ph=Object.assign({},ph,{caption:[sc?sceneLabel(sc):'',ph.caption].filter(Boolean).join(' · ')});const u=URL.createObjectURL(phBlob(ph));objURLs.push(u);return `<figure><img src="${u}" alt="${esc(ph.caption||'Set-Foto')}">${ph.caption?`<figcaption>${esc(ph.caption)}</figcaption>`:''}</figure>`;}).join('');}}
 
@@ -1084,7 +1207,7 @@ function memoExport(p){
     for(const s of ss){out.push('',`--- Setup ${s.vfxid} · SETUP-ID: ${s.id}`,`Szene: ${s.scene||'–'} | Slate: ${s.slate||'–'} | Zeit: ${s.time||'–'}`,`Beschreibung: ${s.desc||'–'}`);
       (s.cams||[]).forEach((c,i)=>out.push(`cams.${i}: `+CAM_FIELDS.filter(f=>c[f]).map(f=>`${f}=${c[f]}`).join(', ')));
       out.push('refs: '+(REFS.filter(r=>(s.refs||{})[r.k]).map(r=>r.k).join(', ')||'keine'));
-      (s.takes||[]).forEach((t,i)=>out.push(`takes.${i}: n=${t.n}${t.circled?', circled':''}${t.clip?', clip='+t.clip:''}${t.note?', note='+t.note:''}`));
+      (s.takes||[]).forEach((t,i)=>out.push(`takes.${i}: n=${t.n}${t.circled?', circled':''}${t.clip?', clip='+t.clip:''}${t.meta&&(t.meta.time||t.meta.tcin)?', zeit='+hmFrom(t.meta.time,t.meta.tcin):''}${t.note?', note='+t.note:''}`));
       for(const m of (s.memos||[]).filter(m=>!m.done&&(m.text.trim()||m.audio))){n++;out.push(`MEMO ${m.id} (${m.t}${m.take?', zu Take '+m.take:''}${m.audio?', Audio im Paket':''}): ${m.text.trim()||'[Audio – bitte transkribieren]'}`);}
     }out.push('');}
   const ls=locsOf(p).filter(l=>(l.memos||[]).some(m=>!m.done&&(m.text.trim()||m.audio)));
@@ -1158,18 +1281,20 @@ function buildCSV(it){const rows=[CSV_HEAD];
 function bufToB64(buf){const b=new Uint8Array(buf);let s='';for(let i=0;i<b.length;i+=0x8000)s+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000));return btoa(s);}
 function b64ToBuf(b64){const s=atob(b64);const b=new Uint8Array(s.length);for(let i=0;i<s.length;i++)b[i]=s.charCodeAt(i);return b.buffer;}
 async function buildBackup(p){const items=[p,...locsOf(p)];for(const d of kids(p.id,'day')){items.push(d);items.push(...kids(d.id,'setup'));}
-  const photos=[],audio=[],origs=[];
+  const photos=[],audio=[],origs=[],cthumbs=[];
   for(const s of items.filter(i=>i.type==='setup'||i.type==='loc')){
     for(const ph of await getPhotos(s.id))photos.push({id:ph.id,setupId:ph.setupId,caption:ph.caption,scene:ph.scene||'',meta:ph.meta||null,origId:ph.origId||null,lens:ph.lens||null,autoCap:ph.autoCap||'',ann:ph.ann||null,mask:ph.mask||null,annData:ph.annBuf?bufToB64(ph.annBuf):null,created:ph.created,type:ph.type,data:bufToB64(ph.buf)});
     for(const o of await idb('orig','readonly',st=>st.index('setup').getAll(s.id)))origs.push({id:o.id,setupId:o.setupId,f35:o.f35||null,W:o.W,H:o.H,created:o.created,type:o.type,data:bufToB64(o.buf)});
+    for(const x of await getCThumbs(s.id))cthumbs.push({id:x.id,setupId:x.setupId,clip:x.clip,created:x.created,data:bufToB64(x.buf)});
     for(const a of await getAudio(s.id))audio.push({id:a.id,setupId:a.setupId,created:a.created,type:a.type,data:bufToB64(a.buf)});}
-  return JSON.stringify({app:'vfx-setlog',version:1,exported:new Date().toISOString(),items,photos,audio,origs});}
+  return JSON.stringify({app:'vfx-setlog',version:1,exported:new Date().toISOString(),items,photos,audio,origs,cthumbs});}
 async function importBackup(file){if(!file)return;
   try{const j=JSON.parse(await file.text());if(j.app!=='vfx-setlog'||!Array.isArray(j.items))throw new Error('Keine Setlog-Backup-Datei.');
     const ph=(j.photos||[]).map(x=>({id:x.id,setupId:x.setupId,caption:x.caption||'',scene:x.scene||'',meta:x.meta||null,origId:x.origId||null,lens:x.lens||null,autoCap:x.autoCap||'',ann:x.ann||null,mask:x.mask||null,annBuf:x.annData?b64ToBuf(x.annData):null,created:x.created||Date.now(),type:x.type||'image/jpeg',buf:b64ToBuf(x.data)}));
     const au=(j.audio||[]).map(x=>({id:x.id,setupId:x.setupId,created:x.created||Date.now(),type:x.type||'audio/mp4',buf:b64ToBuf(x.data)}));
     const og=(j.origs||[]).map(x=>({id:x.id,setupId:x.setupId,f35:x.f35,W:x.W,H:x.H,created:x.created,type:x.type||'image/jpeg',buf:b64ToBuf(x.data)}));
-    await txn(['items','photos','audio','orig'],'readwrite',t=>{const si=t.objectStore('items'),sp=t.objectStore('photos'),sa=t.objectStore('audio');og.forEach(x=>t.objectStore('orig').put(x));j.items.forEach(i=>si.put(i));ph.forEach(x=>sp.put(x));au.forEach(x=>sa.put(x));});
+    const ct=(j.cthumbs||[]).map(x=>({id:x.id,setupId:x.setupId,clip:x.clip,created:x.created,buf:b64ToBuf(x.data)}));
+    await txn(['items','photos','audio','orig','cthumb'],'readwrite',t=>{const si=t.objectStore('items'),sp=t.objectStore('photos'),sa=t.objectStore('audio');og.forEach(x=>t.objectStore('orig').put(x));ct.forEach(x=>t.objectStore('cthumb').put(x));j.items.forEach(i=>si.put(i));ph.forEach(x=>sp.put(x));au.forEach(x=>sa.put(x));});
     j.items.forEach(i=>S.set(i.id,i));const p=j.items.find(i=>i.type==='project');
     toast(`Backup geladen: ${p?p.name:''} (${ph.length} Fotos)`);rerender();}
   catch(e){toast('Import fehlgeschlagen: '+e.message);}}
@@ -1226,8 +1351,8 @@ function arm(b){if(b.dataset.armed)return true;b.dataset.armed='1';b.dataset.txt
   setTimeout(()=>{if(b.isConnected&&b.dataset.armed){delete b.dataset.armed;b.classList.remove('armed');b.textContent=b.dataset.txt;}},3500);return false;}
 async function deleteItem(id){const ids=[];(function walk(x){ids.push(x);[...S.values()].filter(i=>i.parent===x).forEach(i=>walk(i.id));})(id);
   const sids=ids.filter(i=>S.get(i)&&(S.get(i).type==='setup'||S.get(i).type==='loc'));const pk=[],ak=[];
-  const ok_=[];for(const sid of sids){ok_.push(...await idb('orig','readonly',s=>s.index('setup').getAllKeys(sid)));pk.push(...await idb('photos','readonly',s=>s.index('setup').getAllKeys(sid)));ak.push(...await idb('audio','readonly',s=>s.index('setup').getAllKeys(sid)));}
-  await txn(['items','photos','audio','orig'],'readwrite',t=>{ok_.forEach(k=>t.objectStore('orig').delete(k));ids.forEach(i=>t.objectStore('items').delete(i));pk.forEach(k=>t.objectStore('photos').delete(k));ak.forEach(k=>t.objectStore('audio').delete(k));});
+  const ok_=[],ck_=[];for(const sid of sids){ck_.push(...await idb('cthumb','readonly',s=>s.index('setup').getAllKeys(sid)));ok_.push(...await idb('orig','readonly',s=>s.index('setup').getAllKeys(sid)));pk.push(...await idb('photos','readonly',s=>s.index('setup').getAllKeys(sid)));ak.push(...await idb('audio','readonly',s=>s.index('setup').getAllKeys(sid)));}
+  await txn(['items','photos','audio','orig','cthumb'],'readwrite',t=>{ck_.forEach(k=>t.objectStore('cthumb').delete(k));ok_.forEach(k=>t.objectStore('orig').delete(k));ids.forEach(i=>t.objectStore('items').delete(i));pk.forEach(k=>t.objectStore('photos').delete(k));ak.forEach(k=>t.objectStore('audio').delete(k));});
   ids.forEach(i=>{S.delete(i);pending.delete(i);});}
 
 app.addEventListener('click',async e=>{
@@ -1253,6 +1378,7 @@ app.addEventListener('click',async e=>{
     case 'delScene':{it.scenes.splice(+b.dataset.i,1);touch(it);rerender();break;}
     case 'setKind':{it.kind=b.dataset.val;touch(it);rerender();break;}
     case 'finder':{await flush();vfOpen(S.get(b.dataset.id));break;}
+    case 'ditApply':{const p=S.get(b.dataset.id);if(!ditState||!ditState.plan)break;const r=await ditApply(p,ditState.plan);ditState=null;rerender();toast(`${r.n} Clips übernommen (${r.add} neue Takes)${r.miss?` · ${r.miss} ohne Setup`:''}`);break;}
     case 'lensSheet':{await flush();lensSheetOpen(S.get(b.dataset.id));break;}
     case 'gps':{if(!navigator.geolocation){toast('Standort nicht verfügbar');break;}b.textContent='◎ Suche Position…';
       navigator.geolocation.getCurrentPosition(pos=>{it.gps=pos.coords.latitude.toFixed(6)+', '+pos.coords.longitude.toFixed(6);touch(it);rerender();toast(`Position übernommen (±${Math.round(pos.coords.accuracy)} m)`);},
@@ -1304,7 +1430,13 @@ app.addEventListener('input',e=>{const el=e.target;
   if(it.type==='loc'&&/^(gps|date|time)$/.test(el.dataset.k)){const sb=$('#sunBox');if(sb)sb.innerHTML=sunHTML(it);}
   if((it.type==='setup'&&el.dataset.k==='vfxid')||((it.type==='project'||it.type==='loc')&&el.dataset.k==='name'))$('#ttl').textContent=el.value||'—';});
 app.addEventListener('change',e=>{const el=e.target;
+  if(el.dataset.ditmap!=null&&ditState){const v=el.value;if(v==='')delete ditState.T.map[el.dataset.ditmap];else ditState.T.map[el.dataset.ditmap]=+v;rerender();return;}
+  if(el.id==='ditFallback'&&ditState){ditState.fallback=el.value;rerender();return;}
   if(el.dataset.file==='photo'){const host=el.closest('[data-item]');addPhotos(S.get(host.dataset.item),[...el.files]).catch(err=>toast('Foto-Fehler: '+err.message)).finally(()=>el.value='');}
+  if(el.dataset.file==='dit'){const f=el.files[0];el.value='';if(!f)return;const p=S.get(nav[nav.length-1].id);
+    f.text().then(txt=>{try{ditState={p:p.id,T:parseMeta(txt,f.name),fallback:''};rerender();toast(`${ditState.T.data.length} Zeilen gelesen`);}catch(err){toast('Import: '+err.message);}});return;}
+  if(el.dataset.file==='ditthumbs'){const files=[...el.files];el.value='';const p=S.get(nav[nav.length-1].id);toast('Thumbnails werden zugeordnet…');
+    ditThumbs(p,files).then(r=>{const o=$('#ditThumbOut');if(o)o.innerHTML=`<p class="hint">${r.ok} zugeordnet${r.miss.length?` · ${r.miss.length} ohne passenden Take: ${esc(r.miss.slice(0,8).join(', '))}${r.miss.length>8?' …':''}`:''}</p>`;toast(`${r.ok} Thumbnails zugeordnet`);}).catch(err=>toast('Fehler: '+err.message));return;}
   if(el.dataset.file==='import'){importBackup(el.files[0]).finally(()=>el.value='');}});
 
 /* ---------- Boot ---------- */
