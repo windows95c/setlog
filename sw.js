@@ -1,6 +1,6 @@
 // VFX Setlog – offline cache. Bump VERSION when files change.
-const VERSION = 'setlog-1.7.3';
-const FILES = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-512.png'];
+const VERSION = 'setlog-1.8.0';
+const FILES = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-512.png', './jspdf.umd.min.js', './jspdf.plugin.autotable.min.js'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));

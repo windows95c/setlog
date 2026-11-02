@@ -280,7 +280,7 @@ window.addEventListener('unhandledrejection',function(e){var r=e.reason;window._
 </script>
 <script>
 'use strict';
-const APP_VERSION='1.7.3';
+const APP_VERSION='1.8.0';
 /* Kamera/Mikro offen halten: iOS fragt bei jedem neuen Zugriff erneut – Streams werden daher wiederverwendet und erst nach Leerlauf freigegeben */
 const KEEP_MS=3*60000;const media={cam:null,camKey:'',camT:0,mic:null,micT:0};
 const liveStream=s=>!!(s&&s.getTracks().some(t=>t.readyState==='live'&&!t.muted&&t.enabled));
@@ -1087,7 +1087,7 @@ function ditPlan(p,T,fallback){const days=kids(p.id,'day');const setups=days.fla
   for(const r of T.data){const {clip,meta}=rowClip(T,r);if(!clip||seen.has(clip))continue;seen.add(clip);
     let tgt=byClip.get(clip),how='Take vorhanden';
     if(!tgt&&meta.setup){const date=isoDate(meta.date);const hit=setups.find(x=>String(x.s.vfxid).trim()===meta.setup.trim()&&(!date||x.d.date===date))||setups.find(x=>String(x.s.vfxid).trim()===meta.setup.trim());if(hit){tgt={s:hit.s,i:null};how='Setup-Spalte';}}
-    if(!tgt&&T.map.setup!=null&&!meta.setup){tgt=fallback?(()=>{const f=setups.find(x=>x.s.id===fallback);return f?{s:f.s,i:null}:null;})():null;how='Standard-Setup';}
+    if(!tgt&&T.map.setup!=null){tgt=fallback?(()=>{const f=setups.find(x=>x.s.id===fallback);return f?{s:f.s,i:null}:null;})():null;how='Standard-Setup';}
     else if(!tgt){const date=isoDate(meta.date);const hmv=hmFrom(meta.time,meta.tcin);let cand=setups.filter(x=>!date||x.d.date===date);
       let s=meta.scene?cand.find(x=>String(x.s.scene).trim().toLowerCase()===meta.scene.toLowerCase()&&(!meta.take||true)):null;how='nach Szene';
       if(!s&&hmv){const before=cand.filter(x=>x.s.time&&x.s.time<=hmv).sort((a,b)=>a.s.time.localeCompare(b.s.time));s=before.pop();how='nach Uhrzeit';}
@@ -1116,7 +1116,7 @@ async function ditThumbs(p,files){const setups=kids(p.id,'day').flatMap(d=>kids(
     if(!tb){miss.push(f.name);continue;}
     await idb('cthumb','readwrite',st=>st.put({id:hit.s.id+'|'+c,setupId:hit.s.id,clip:c,buf:tb,created:Date.now()}));hit.t.thumb=true;touch(hit.s);ok++;}
   await flush();return {ok,miss};}
-function tmetaLine(m){if(!m)return '';const parts=[m.tcin&&'TC '+m.tcin,m.lens,m.mm&&(String(m.mm).match(/mm/i)?m.mm:m.mm+'mm'),m.tstop&&('T'+String(m.tstop).replace(/^[tf]\s*/i,'')),m.iso&&('EI '+m.iso),m.shutter&&(String(m.shutter).match(/°|\//)?m.shutter:m.shutter+'°'),m.fps&&(m.fps+' fps'),m.wb&&(String(m.wb).match(/k$/i)?m.wb:m.wb+'K'),m.nd&&(/^nd|clear/i.test(m.nd)?m.nd:'ND '+m.nd),m.focus&&('Fokus '+m.focus),m.height&&('Höhe '+m.height+(/\d$/.test(m.height)?' cm':'')),m.tilt&&('Tilt '+m.tilt)].filter(Boolean);return parts.join(' · ');}
+function tmetaLine(m){if(!m)return '';const parts=[m.tcin&&'TC '+m.tcin,m.lens,m.mm&&!new RegExp('\\b'+String(m.mm).replace(/\s*mm$/i,'')+'\\s*mm','i').test(m.lens||'')&&(String(m.mm).match(/mm/i)?m.mm:m.mm+'mm'),m.tstop&&('T'+String(m.tstop).replace(/^[tf]\s*/i,'')),m.iso&&('EI '+m.iso),m.shutter&&(String(m.shutter).match(/°|\//)?m.shutter:m.shutter+'°'),m.fps&&(m.fps+' fps'),m.wb&&(String(m.wb).match(/k$/i)?m.wb:m.wb+'K'),m.nd&&(/^nd|clear/i.test(m.nd)?m.nd:'ND '+m.nd),m.focus&&('Fokus '+m.focus),m.height&&('Höhe '+m.height+(/\d$/.test(m.height)?' cm':'')),m.tilt&&('Tilt '+m.tilt)].filter(Boolean);return parts.join(' · ');}
 async function fillTakeThumbs(s,sel){const list=await getCThumbs(s.id);const map=new Map(list.map(x=>[x.clip,x]));
   document.querySelectorAll(sel||'[data-tthumb]').forEach(el=>{const x=map.get(el.dataset.tthumb);if(!x)return;const u=URL.createObjectURL(new Blob([x.buf],{type:'image/jpeg'}));objURLs.push(u);el.innerHTML=`<img src="${u}" alt="${esc(x.clip)}">`;el.hidden=false;});}
 
@@ -1143,6 +1143,78 @@ function vDit(cur){const p=S.get(cur.id);const T=ditState&&ditState.p===p.id?dit
     <label class="btn block">Thumbnails wählen<input class="vh" type="file" accept="image/*" multiple data-file="ditthumbs"></label><div id="ditThumbOut"></div></section>
   <p class="hint">Bisherige Importe: ${(p.ditImports||[]).length?(p.ditImports||[]).map(x=>`${fmtDT(x.at)} (${x.clips} Clips)`).join(', '):'keine'}</p>`};}
 
+/* ---------- PDF-Generator: lokal, seitenweise, Bilder einzeln verkleinert (kein Druck-Rendering → kein Speicher-Absturz) ---------- */
+let pdfLibP=null;
+function loadPdfLib(){if(window.jspdf&&window.jspdf.jsPDF&&window.jspdf.jsPDF.API&&window.jspdf.jsPDF.API.autoTable)return Promise.resolve();if(pdfLibP)return pdfLibP;
+  const ld=src=>new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error(src+' konnte nicht geladen werden'));document.head.appendChild(s);});
+  pdfLibP=ld('jspdf.umd.min.js').then(()=>ld('jspdf.plugin.autotable.min.js')).catch(e=>{pdfLibP=null;throw e;});return pdfLibP;}
+const CP1252=new Set('€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ');
+const pt=s=>String(s??'').replace(/✓/g,'x').replace(/●/g,'*').replace(/[→⇒]/g,'->').replace(/[≈∼]/g,'~').replace(/∢/g,'°').replace(/[^\x09\x0a\x0d\x20-\x7e\xa0-\xff]/g,c=>CP1252.has(c)?c:'?');
+async function pdfJpeg(blob,maxPx,q){const im=await loadImg(blob);const W=im.naturalWidth,H=im.naturalHeight;
+  if(Math.max(W,H)<=maxPx&&/jpe?g/.test(blob.type||'')){return {data:new Uint8Array(await blob.arrayBuffer()),w:W,h:H};}
+  const k=Math.min(1,maxPx/Math.max(W,H));const c=document.createElement('canvas');c.width=Math.round(W*k);c.height=Math.round(H*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);
+  const b=await new Promise(r=>c.toBlob(r,'image/jpeg',q||.85));const out={data:new Uint8Array(await b.arrayBuffer()),w:c.width,h:c.height};c.width=c.height=0;return out;}
+async function buildPdf(it,size,prog){await loadPdfLib();const {jsPDF}=window.jspdf;
+  const p=projectOf(it);const days=it.type==='project'?kids(p.id,'day'):it.type==='day'?[it]:[];const locs=it.type==='project'?locsOf(p):it.type==='loc'?[it]:[];
+  const doc=new jsPDF({unit:'mm',format:'a4',compress:true});const PW=210,PH=297,M=12,CW=PW-2*M,BOT=PH-14;let y=M;
+  const ACC=[168,106,0],GREY=[90,90,90];
+  const ensure=h=>{if(y+h>BOT){doc.addPage();y=M;}};
+  const txt=(s,o={})=>{if(!s)return;doc.setFont('helvetica',o.bold?'bold':o.italic?'italic':'normal');doc.setFontSize(o.size||9);doc.setTextColor(...(o.color||[20,20,20]));
+    const lines=doc.splitTextToSize(pt(s),o.w||CW);const lh=(o.size||9)*0.42;for(const ln of lines){ensure(lh);doc.text(ln,(o.x||M),y+lh*0.8);y+=lh;}y+=o.after??1.2;};
+  const hr=(c=[180,180,180],w=.3)=>{doc.setDrawColor(...c);doc.setLineWidth(w);doc.line(M,y,PW-M,y);y+=2;};
+  const table=(head,body,opt={})=>{if(!body.length)return;doc.autoTable(Object.assign({startY:y,head:[head],body,theme:'grid',margin:{left:M,right:M,bottom:16},
+    styles:{font:'helvetica',fontSize:7.2,cellPadding:1,overflow:'linebreak',textColor:[20,20,20],lineColor:[200,200,200],lineWidth:.15},
+    headStyles:{fillColor:[238,238,238],textColor:[20,20,20],fontStyle:'bold'}},opt));y=doc.lastAutoTable.finalY+3;};
+  const per={L:1,M:2,S:3}[size]||2,maxPx={L:2000,M:1400,S:1000}[size]||1400;
+  let nImg=0,doneImg=0;for(const s of [...days.flatMap(d=>kids(d.id,'setup')),...locs])nImg+=s.photoCount||0;
+  async function photos(s){const scs=scenesOf(s);const ord=new Map(scs.map((x,i)=>[x.id,i]));
+    const list=(await getPhotos(s.id)).sort((a,b)=>(ord.has(a.scene)?ord.get(a.scene):999)-(ord.has(b.scene)?ord.get(b.scene):999)||(a.created-b.created));if(!list.length)return;
+    const gap=4,colW=(CW-gap*(per-1))/per;
+    for(let i=0;i<list.length;i+=per){const row=[];
+      for(const ph of list.slice(i,i+per)){prog&&prog(`Bild ${++doneImg}/${nImg}`);const im=await pdfJpeg(phBlob(ph),maxPx,.85);const sc=scs.find(x=>x.id===ph.scene);
+        let w=colW,h=colW*im.h/im.w;const maxH=BOT-M-8;if(h>maxH){h=maxH;w=h*im.w/im.h;}row.push({im,w,h,cap:[sc?sceneLabel(sc):'',ph.caption].filter(Boolean).join(' · ')});}
+      const rowH=Math.max(...row.map(r=>r.h))+5;ensure(rowH);
+      row.forEach((r,k)=>{const x=M+k*(colW+gap);doc.addImage(r.im.data,'JPEG',x,y,r.w,r.h,undefined,'FAST');if(r.cap){doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(...GREY);doc.text(doc.splitTextToSize(pt(r.cap),colW)[0],x,y+r.h+3);}r.im=null;});
+      y+=rowH+1;}}
+  // Kopf
+  doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(...ACC);doc.text(it.type==='loc'?'TECH RECCE / LOCATION':'VFX SET REPORT',M,y+3);y+=6;
+  txt(p.name,{size:18,bold:true,after:2});
+  const meta=[['Prod.-Nr.',p.prodnr],['Kunde',p.client],['Produktion',p.production],['VFX Supervisor',p.sup],['Regie',p.director],['DOP',p.dop],['Projekt-FPS',p.fps]].filter(x=>x[1]);
+  if(meta.length)table(['',''],meta.map(([k,v])=>[k,v]),{theme:'plain',showHead:'never',columnStyles:{0:{cellWidth:32,textColor:GREY}},styles:{fontSize:8.5,cellPadding:.6}});
+  for(const d of days){const ss=kids(d.id,'setup');prog&&prog(`DT ${pad2(d.dt)}`);ensure(18);y+=2;
+    txt(`DT ${pad2(d.dt)} · ${fmtDate(d.date)}`,{size:13,bold:true,after:.5});hr([20,20,20],.6);
+    txt([d.location,(d.weather||[]).join(', ')].filter(Boolean).join(' · '),{color:GREY});if(d.notes)txt(d.notes);
+    for(const s of ss){ensure(24);y+=2;doc.setDrawColor(...ACC);doc.setLineWidth(.8);doc.line(M,y,M,y+7);
+      doc.setFont('helvetica','bold');doc.setFontSize(12);doc.setTextColor(20,20,20);doc.text(pt(s.vfxid||'—'),M+2.5,y+5.2);
+      doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...GREY);doc.text(pt([s.scene&&'Szene '+s.scene,s.slate&&'Slate '+s.slate,s.time].filter(Boolean).join(' · ')),M+26,y+5.2);y+=9;
+      if(s.desc)txt(s.desc,{size:9.5});if((s.kinds||[]).length)txt(s.kinds.join(' · '),{color:ACC,bold:true,size:8.5});
+      const cams=s.cams||[];if(cams.length)table(['Cam','Body','Objektiv','mm','T','ISO','Shutter','FPS','Filter','K','Höhe','Tilt','Fokus','Rig'],cams.map(c=>['cam','body','lens','mm','tstop','iso','shutter','fps','filter','kelvin','height','tilt','focus','rig'].map(f=>pt(c[f]))));
+      cams.filter(c=>c.note).forEach(c=>txt(`Cam ${c.cam}: ${c.note}`,{size:8.5}));
+      const refs=s.refs||{};txt(REFS.map(r=>`${refs[r.k]?'[x]':'[ ]'} ${r.l}`).join('   '),{size:7.5,color:GREY});if(s.refsNote)txt(s.refsNote,{size:8.5});
+      const tks=s.takes||[];
+      if(tks.length){const th=new Map();if(tks.some(t=>t.thumb))for(const x of await getCThumbs(s.id)){const im=await loadImg(new Blob([x.buf],{type:'image/jpeg'})).catch(()=>null);th.set(x.clip,{data:new Uint8Array(x.buf),w:im?im.naturalWidth:16,h:im?im.naturalHeight:9});}
+        const withT=th.size>0;const head=['Take','●',...(withT?['Bild']:[]),'Clip','Kamera-Metadaten','Notiz'];
+        table(head.map(pt),tks.map(t=>[pt(t.n),t.circled?'*':'',...(withT?['']:[]),pt(t.clip),pt(tmetaLine(t.meta)),pt(t.note)]),{
+          columnStyles:withT?{0:{cellWidth:9},1:{cellWidth:5,halign:'center'},2:{cellWidth:24},3:{cellWidth:20},5:{cellWidth:38}}:{0:{cellWidth:9},1:{cellWidth:5,halign:'center'},2:{cellWidth:20},4:{cellWidth:45}},
+          didParseCell:dt=>{const t=dt.section==='body'&&tks[dt.row.index];if(!t)return;if(t.circled)dt.cell.styles.fillColor=[255,246,224];if(withT&&th.has(normClip(t.clip)))dt.cell.styles.minCellHeight=13;},
+          didDrawCell:dt=>{if(!withT||dt.section!=='body'||dt.column.index!==2)return;const t=tks[dt.row.index];const im=t&&th.get(normClip(t.clip));if(!im)return;
+            const w=dt.cell.width-2,h=Math.min(dt.cell.height-2,w*im.h/im.w);doc.addImage(im.data,'JPEG',dt.cell.x+1,dt.cell.y+1,h*im.w/im.h,h,undefined,'FAST');}});}
+      if(s.notes)txt('Notizen: '+s.notes,{size:8.5});
+      (s.memos||[]).filter(m=>m.text.trim()&&!m.done).forEach(m=>txt(`Memo ${m.t}: ${m.text}`,{size:8,italic:true,color:GREY}));
+      await photos(s);y+=2;}}
+  if(locs.length){ensure(18);y+=2;txt('Tech Recce & Locations',{size:13,bold:true,after:.5});hr([20,20,20],.6);
+    for(const l of locs){prog&&prog(l.name||'Location');ensure(20);y+=2;txt(`${l.name||'Location'}  ·  ${l.kind||''}`,{size:12,bold:true});
+      if((l.flags||[]).length)txt(l.flags.join(' · '),{color:ACC,bold:true,size:8.5});
+      const g=parseGPS(l.gps),sd=g?sunDay(l.date,g.lat,g.lon):null;
+      const kv=[['Datum',[l.date&&fmtDate(l.date),l.time].filter(Boolean).join(' · ')],['Adresse',l.address],['Kontakt',l.contact],['GPS',l.gps],
+        ['Sonne',sd?`Aufgang ${hm(sd.ev.rise&&sd.ev.rise.t)} (${sd.ev.rise?deg(sd.ev.rise.az):'–'}) · Höchststand ${hm(sd.max.t)} ${Math.round(sd.max.el)}° · Untergang ${hm(sd.ev.set&&sd.ev.set.t)} (${sd.ev.set?deg(sd.ev.set.az):'–'}) · ${tzLabel()}`:''],
+        ['Zugang',l.access],['Strom',l.power],['Ton',l.sound],['Licht',l.light],['VFX',l.vfx],['Notizen',l.notes]].filter(x=>x[1]);
+      table(['',''],kv.map(([k,v])=>[pt(k),pt(v)]),{theme:'plain',showHead:'never',columnStyles:{0:{cellWidth:24,textColor:GREY,fontStyle:'bold'}},styles:{fontSize:8.5,cellPadding:.8}});
+      (l.memos||[]).filter(m=>m.text.trim()&&!m.done).forEach(m=>txt(`Memo ${m.t}: ${m.text}`,{size:8,italic:true,color:GREY}));
+      await photos(l);}}
+  const n=doc.getNumberOfPages();for(let i=1;i<=n;i++){doc.setPage(i);doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(140,140,140);
+    doc.text(pt(`${p.name} · VFX Setlog · ${fmtDT(Date.now())}`),M,PH-7);doc.text(`Seite ${i} / ${n}`,PW-M,PH-7,{align:'right'});}
+  prog&&prog('PDF wird gespeichert…');return doc.output('blob');}
 /* ---------- Report ---------- */
 function repSize(){try{return localStorage.getItem('setlog-psize')||'M';}catch{return 'M';}}
 function vReport(cur){
@@ -1150,8 +1222,8 @@ function vReport(cur){
   const meta=[['Prod.-Nr.',p.prodnr],['Kunde',p.client],['Produktion',p.production],['VFX Supervisor',p.sup],['Regie',p.director],['DOP',p.dop],['Projekt-FPS',p.fps]].filter(x=>x[1]);
   return {title:'Report',sub:it.type==='project'?p.name:it.type==='loc'?`${it.name} · ${p.name}`:`DT ${pad2(it.dt)} · ${p.name}`,html:`
   <div class="toolbar noprint"><div class="sec-row"><span class="hint">Fotogröße im PDF</span><div class="chips small">${[['L','Groß · 1'],['M','Mittel · 2'],['S','Klein · 3']].map(([k,l])=>`<button type="button" class="chip" data-act="psize" data-val="${k}" aria-pressed="${repSize()===k}">${l}</button>`).join('')}</div></div>
-  <button class="btn primary block" data-act="print">Drucken / als PDF sichern</button>
-  <p class="hint">Im Druckdialog oben auf <b>Teilen</b> tippen → <b>In Dateien sichern</b>, Mail oder AirDrop.</p></div>
+  <button class="btn primary block" data-act="mkpdf" data-id="${it.id}">PDF erstellen</button>
+  <p class="hint">Das PDF wird hier auf dem iPhone erzeugt, Seite für Seite. Danach <b>Teilen …</b> → <b>In Dateien sichern</b>. Die Vorschau unten zeigt Fotos verkleinert.</p></div>
   <article class="report ps-${repSize()}">
     <div class="r-kicker mono">${it.type==='loc'?'TECH RECCE / LOCATION':'VFX SET REPORT'}</div><h1>${esc(p.name)}</h1>
     <dl class="r-meta">${meta.map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
@@ -1185,7 +1257,7 @@ function rLoc(l){const g=parseGPS(l.gps);const d=g?sunDay(l.date,g.lat,g.lon):nu
 async function fillReportPhotos(days,locs){for(const s of days.flatMap(d=>kids(d.id,'setup'))){if(!(s.takes||[]).some(t=>t.thumb))continue;for(const x of await getCThumbs(s.id)){const el=document.querySelector(`[data-rtthumb="${s.id}|${x.clip}"]`);if(el){const u=URL.createObjectURL(new Blob([x.buf],{type:'image/jpeg'}));objURLs.push(u);el.innerHTML=`<img src="${u}" alt="">`;}}}
   for(const s of [...days.flatMap(d=>kids(d.id,'setup')),...(locs||[])]){if(!s.photoCount)continue;
   const box=document.querySelector(`.r-photos[data-setup="${s.id}"]`);if(!box)continue;
-  const scs=scenesOf(s);const ord=new Map(scs.map((x,i)=>[x.id,i]));const list=(await getPhotos(s.id)).sort((a,b)=>(ord.has(a.scene)?ord.get(a.scene):999)-(ord.has(b.scene)?ord.get(b.scene):999));box.innerHTML=list.map(ph=>{const sc=scs.find(x=>x.id===ph.scene);ph=Object.assign({},ph,{caption:[sc?sceneLabel(sc):'',ph.caption].filter(Boolean).join(' · ')});const u=URL.createObjectURL(phBlob(ph));objURLs.push(u);return `<figure><img src="${u}" alt="${esc(ph.caption||'Set-Foto')}">${ph.caption?`<figcaption>${esc(ph.caption)}</figcaption>`:''}</figure>`;}).join('');}}
+  const scs=scenesOf(s);const ord=new Map(scs.map((x,i)=>[x.id,i]));const list=(await getPhotos(s.id)).sort((a,b)=>(ord.has(a.scene)?ord.get(a.scene):999)-(ord.has(b.scene)?ord.get(b.scene):999));box.innerHTML=list.map(ph=>{const sc=scs.find(x=>x.id===ph.scene);ph=Object.assign({},ph,{caption:[sc?sceneLabel(sc):'',ph.caption].filter(Boolean).join(' · ')});const u=URL.createObjectURL(ph.thumb?new Blob([ph.thumb],{type:'image/jpeg'}):phBlob(ph));objURLs.push(u);return `<figure><img src="${u}" alt="${esc(ph.caption||'Set-Foto')}">${ph.caption?`<figcaption>${esc(ph.caption)}</figcaption>`:''}</figure>`;}).join('');}}
 
 /* ---------- Claude round trip ---------- */
 const PATCH_SETUP=/^(scene|slate|time|desc|kinds|refsNote|notes|refs\.[a-z]+|cams\.\d+\.(cam|body|lens|mm|tstop|iso|shutter|fps|filter|kelvin|height|tilt|focus|rig|note)|takes\.\d+\.(n|circled|clip|note))$/;
@@ -1406,6 +1478,10 @@ app.addEventListener('click',async e=>{
     case 'del':{const x=S.get(b.dataset.id);await deleteItem(x.id);nav.pop();toast('Gelöscht');render();window.scrollTo(0,0);break;}
     case 'report':go('report',b.dataset.id);break;
     case 'psize':{try{localStorage.setItem('setlog-psize',b.dataset.val);}catch{}const a=document.querySelector('.report');if(a)a.className='report ps-'+b.dataset.val;document.querySelectorAll('[data-act=psize]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.val===b.dataset.val));break;}
+    case 'mkpdf':{const it2=S.get(b.dataset.id);const p2=projectOf(it2);b.disabled=true;const lbl=b.textContent;await flush();
+      try{const blob=await buildPdf(it2,repSize(),t=>{b.textContent=t;});b.textContent=lbl;b.disabled=false;
+        const nm=`${slug(p2.name)}_${it2.type==='loc'?'Recce_'+slug(it2.name):it2.type==='day'?'DT'+pad2(it2.dt):'VFX-Report'}_${today()}.pdf`;deliver(nm,blob,'application/pdf');}
+      catch(err){b.textContent=lbl;b.disabled=false;toast('PDF-Fehler: '+(err&&err.message||err));console.error(err);}break;}
     case 'print':{b.disabled=true;b.textContent='Bilder werden geladen…';const imgs=[...document.querySelectorAll('.report img')];
       await Promise.all(imgs.map(im=>im.complete&&im.naturalWidth?Promise.resolve():new Promise(r=>{im.onload=im.onerror=r;setTimeout(r,8000);})));
       await Promise.all(imgs.map(im=>im.decode?im.decode().catch(()=>{}):null));
